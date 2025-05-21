@@ -1,0 +1,50 @@
+{
+  "name": "strava-weather",
+  "version": "1.0.0",
+  "description": "Automatically add weather data to Strava activities using webhooks",
+  "private": true,
+  "workspaces": ["api", "web"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w api\" \"npm run dev -w web\"",
+    "dev:web": "npm run dev -w web",
+    "dev:api": "npm run dev -w api",
+    "build": "npm run build -w api && npm run build -w web",
+    "build:api": "npm run build -w api",
+    "build:web": "npm run build -w web",
+    "test": "npm run test -w api",
+    "lint": "npm run lint -w api && npm run lint -w web",
+    "lint:fix": "npm run lint:fix -w api && npm run lint:fix -w web",
+    "typecheck": "npm run typecheck -w api && npm run typecheck -w web",
+    "db:generate": "npm run generate -w api",
+    "db:migrate": "npm run migrate -w api",
+    "db:studio": "npm run studio -w api",
+    "db:seed": "npm run seed -w api",
+    "clean": "rm -rf node_modules api/node_modules web/node_modules api/dist web/dist",
+    "setup": "npm install && npm run db:generate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3",
+    "eslint": "^9.25.0",
+    "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=22.11.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": [
+    "strava",
+    "weather",
+    "webhooks",
+    "typescript",
+    "react",
+    "express",
+    "prisma"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/james-langridge/strava-weather.git"
+  }
+}
