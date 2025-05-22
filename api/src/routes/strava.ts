@@ -4,7 +4,7 @@ import { prisma} from "../lib";
 import { activityProcessor } from '../services/activityProcessor';
 import { AppError } from '../middleware/errorHandler';
 
-const router = Router();
+const stravaRouter = Router();
 
 interface StravaWebhookEvent {
     object_type: 'activity' | 'athlete';
@@ -19,7 +19,7 @@ interface StravaWebhookEvent {
 /**
  * GET /api/strava/webhook - Webhook verification
  */
-router.get('/webhook', (req: Request, res: Response) => {
+stravaRouter.get('/webhook', (req: Request, res: Response) => {
     console.log('🔗 Strava webhook verification request:', req.query);
 
     const mode = req.query['hub.mode'];
@@ -38,7 +38,7 @@ router.get('/webhook', (req: Request, res: Response) => {
 /**
  * POST /api/strava/webhook - Handle webhook events
  */
-router.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
+stravaRouter.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const event: StravaWebhookEvent = req.body;
 
@@ -127,7 +127,7 @@ router.post('/webhook', async (req: Request, res: Response, next: NextFunction) 
 /**
  * POST /api/strava/webhook/test - Test webhook processing with manual event
  */
-router.post('/webhook/test', async (req: Request, res: Response, next: NextFunction) => {
+stravaRouter.post('/webhook/test', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { activityId, athleteId } = req.body;
 
@@ -198,7 +198,7 @@ router.post('/webhook/test', async (req: Request, res: Response, next: NextFunct
 /**
  * GET /api/strava/webhook/status - Check webhook subscription status
  */
-router.get('/webhook/status', (req: Request, res: Response) => {
+stravaRouter.get('/webhook/status', (req: Request, res: Response) => {
     res.json({
         success: true,
         message: 'Webhook endpoint is active',
@@ -210,4 +210,4 @@ router.get('/webhook/status', (req: Request, res: Response) => {
     });
 });
 
-export { router as stravaRouter };
+module.exports = { stravaRouter };

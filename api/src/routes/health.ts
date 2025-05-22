@@ -3,7 +3,7 @@ import { config } from '../config/environment';
 import { prisma} from "../lib";
 import type { Request, Response, NextFunction } from 'express';
 
-const router = Router();
+const healthRouter = Router();
 
 interface HealthStatus {
     status: 'healthy' | 'unhealthy' | 'degraded';
@@ -33,7 +33,7 @@ interface ServiceStatus {
  * GET /api/health - Basic health check
  * Fast endpoint for load balancer health checks
  */
-router.get('/', async (req: Request, res: Response) => {
+healthRouter.get('/', async (req: Request, res: Response) => {
     const startTime = Date.now();
 
     try {
@@ -67,7 +67,7 @@ router.get('/', async (req: Request, res: Response) => {
  * GET /api/health/detailed - Comprehensive health check
  * Detailed status of all services and dependencies
  */
-router.get('/detailed', async (req: Request, res: Response, next: NextFunction) => {
+healthRouter.get('/detailed', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const healthStatus: HealthStatus = {
             status: 'healthy',
@@ -202,7 +202,7 @@ async function checkWeatherAPI(): Promise<ServiceStatus> {
  * GET /api/health/ready - Readiness probe
  * For Kubernetes-style readiness checks
  */
-router.get('/ready', async (req: Request, res: Response) => {
+healthRouter.get('/ready', async (req: Request, res: Response) => {
     try {
         // Check critical dependencies only
         await prisma.$queryRaw`SELECT 1`;
@@ -225,7 +225,7 @@ router.get('/ready', async (req: Request, res: Response) => {
  * GET /api/health/live - Liveness probe
  * For Kubernetes-style liveness checks
  */
-router.get('/live', (req: Request, res: Response) => {
+healthRouter.get('/live', (req: Request, res: Response) => {
     res.status(200).json({
         status: 'alive',
         timestamp: new Date().toISOString(),
@@ -233,4 +233,4 @@ router.get('/live', (req: Request, res: Response) => {
     });
 });
 
-export { router as healthRouter };
+module.exports = { router: healthRouter  };

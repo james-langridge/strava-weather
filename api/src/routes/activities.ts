@@ -3,12 +3,12 @@ import { activityProcessor } from '../services/activityProcessor';
 import { authenticateUser } from '../services/auth';
 import { AppError } from '../middleware/errorHandler';
 
-const router = Router();
+const activitiesRouter = Router();
 
 /**
  * POST /api/activities/process/:activityId - Process a specific activity
  */
-router.post('/process/:activityId', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {    try {
+activitiesRouter.post('/process/:activityId', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {    try {
         const user = req.user;
         const { activityId } = req.params;
         const { forceUpdate } = req.body;
@@ -57,7 +57,7 @@ router.post('/process/:activityId', authenticateUser, async (req: Request, res: 
 /**
  * POST /api/activities/process/recent - Process recent activities
  */
-router.post('/process/recent', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+activitiesRouter.post('/process/recent', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = req.user;
 
@@ -103,7 +103,7 @@ router.post('/process/recent', authenticateUser, async (req: Request, res: Respo
 /**
  * POST /api/activities/process/batch - Process multiple specific activities
  */
-router.post('/process/batch', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+activitiesRouter.post('/process/batch', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = req.user;
 
@@ -160,4 +160,4 @@ router.post('/process/batch', authenticateUser, async (req: Request, res: Respon
     }
 });
 
-export { router as activitiesRouter };
+module.exports = { activitiesRouter };

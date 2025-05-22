@@ -5,12 +5,12 @@ import { stravaApiService } from '../services/stravaApi';
 import { AppError } from '../middleware/errorHandler';
 import { prisma} from "../lib";
 
-const router = Router();
+const authRouter = Router();
 
 /**
  * GET /api/auth/strava - Initiate Strava OAuth flow
  */
-router.get('/strava', (req: Request, res: Response) => {
+authRouter.get('/strava', (req: Request, res: Response) => {
     console.log('🚀 Starting Strava OAuth flow');
 
     const scopes = ['activity:read_all', 'activity:write', 'profile:read_all'];
@@ -39,7 +39,7 @@ router.get('/strava', (req: Request, res: Response) => {
 /**
  * GET /api/auth/strava/callback - Handle Strava OAuth callback
  */
-router.get('/strava/callback', async (req: Request, res: Response, next: NextFunction) => {
+authRouter.get('/strava/callback', async (req: Request, res: Response, next: NextFunction) => {
     try {
         console.log('📨 OAuth callback received:', req.query);
 
@@ -147,7 +147,7 @@ router.get('/strava/callback', async (req: Request, res: Response, next: NextFun
 /**
  * GET /api/auth/me - Get current user
  */
-router.get('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+authRouter.get('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = (req as any).user; // Using your existing auth middleware
 
@@ -167,7 +167,7 @@ router.get('/me', authenticateUser, async (req: Request, res: Response, next: Ne
 /**
  * POST /api/auth/logout - Logout user
  */
-router.post('/logout', async (req: Request, res: Response) => {
+authRouter.post('/logout', async (req: Request, res: Response) => {
     try {
         // Clear the authentication cookie using your existing function
         clearAuthCookie(res);
@@ -190,7 +190,7 @@ router.post('/logout', async (req: Request, res: Response) => {
 /**
  * DELETE /api/auth/account - Delete user account
  */
-router.delete('/account', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+authRouter.delete('/account', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = (req as any).user;
 
@@ -233,4 +233,4 @@ router.delete('/account', authenticateUser, async (req: Request, res: Response, 
     }
 });
 
-export { router as authRouter };
+module.exports = { authRouter };

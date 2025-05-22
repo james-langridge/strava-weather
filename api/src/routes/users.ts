@@ -5,7 +5,7 @@ import { authenticateUser } from '@/services/auth';
 import { AppError } from '../utils/errors';
 import type { Request, Response, NextFunction } from 'express';
 
-const router = Router();
+const usersRouter = Router();
 
 // Validation schemas
 const userUpdateSchema = z.object({
@@ -31,7 +31,7 @@ const preferencesUpdateSchema = z.object({
 /**
  * GET /api/users/me - Get current user profile
  */
-router.get('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.get('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = (req as any).user;
 
@@ -93,7 +93,7 @@ router.get('/me', authenticateUser, async (req: Request, res: Response, next: Ne
 /**
  * PATCH /api/users/me - Update user preferences
  */
-router.patch('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.patch('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = (req as any).user;
 
@@ -136,7 +136,7 @@ router.patch('/me', authenticateUser, async (req: Request, res: Response, next: 
 /**
  * PATCH /api/users/me/preferences - Update weather preferences
  */
-router.patch('/me/preferences', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.patch('/me/preferences', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = req.user!;
 
@@ -182,7 +182,7 @@ router.patch('/me/preferences', authenticateUser, async (req: Request, res: Resp
 /**
  * GET /api/users/me/stats - Get basic user statistics
  */
-router.get('/me/stats', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.get('/me/stats', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = (req as any).user;
 
@@ -224,7 +224,7 @@ router.get('/me/stats', authenticateUser, async (req: Request, res: Response, ne
 /**
  * DELETE /api/users/me - Delete user account
  */
-router.delete('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.delete('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = (req as any).user;
 
@@ -245,4 +245,4 @@ router.delete('/me', authenticateUser, async (req: Request, res: Response, next:
     }
 });
 
-export { router as usersRouter };
+module.exports = { usersRouter };
