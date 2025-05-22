@@ -1,341 +1,234 @@
+// api/src/services/weatherService.ts
+
+import axios from 'axios';
 import { config } from '../config/environment.js';
 
-// Weather data interfaces
 export interface WeatherData {
-    temperature: number;
-    temperatureFeel: number;
-    humidity: number;
-    pressure: number;
-    windSpeed: number;
-    windDirection: number;
-    windGust?: number;
-    visibility: number;
-    cloudCover: number;
-    uvIndex?: number;
-    description: string;
-    icon: string;
-    condition: string;
-    timestamp: string;
-    location: {
-        lat: number;
-        lon: number;
-    };
-    source: 'openweather';
-}
-
-export interface WeatherApiResponse {
-    coord: {
-        lon: number;
-        lat: number;
-    };
-    weather: Array<{
-        id: number;
-        main: string;
-        description: string;
-        icon: string;
-    }>;
-    base: string;
-    main: {
-        temp: number;
-        feels_like: number;
-        temp_min: number;
-        temp_max: number;
-        pressure: number;
-        humidity: number;
-    };
-    visibility: number;
-    wind: {
-        speed: number;
-        deg: number;
-        gust?: number;
-    };
-    clouds: {
-        all: number;
-    };
-    dt: number;
-    sys: {
-        type: number;
-        id: number;
-        country: string;
-        sunrise: number;
-        sunset: number;
-    };
-    timezone: number;
-    id: number;
-    name: string;
-    cod: number;
-}
-
-export interface HistoricalWeatherResponse {
-    lat: number;
-    lon: number;
-    timezone: string;
-    timezone_offset: number;
-    data: Array<{
-        dt: number;
-        temp: number;
-        feels_like: number;
-        pressure: number;
-        humidity: number;
-        dew_point: number;
-        uvi?: number;
-        clouds: number;
-        visibility: number;
-        wind_speed: number;
-        wind_deg: number;
-        wind_gust?: number;
-        weather: Array<{
-            id: number;
-            main: string;
-            description: string;
-            icon: string;
-        }>;
-    }>;
+    temperature: number;        // Temperature in Celsius
+    temperatureFeel: number;    // Feels like temperature in Celsius
+    humidity: number;           // Humidity percentage
+    pressure: number;           // Atmospheric pressure in hPa
+    windSpeed: number;          // Wind speed in m/s
+    windDirection: number;      // Wind direction in degrees
+    windGust?: number;          // Wind gust speed in m/s (optional)
+    cloudCover: number;         // Cloud coverage percentage
+    visibility: number;         // Visibility in kilometers
+    condition: string;          // Main weather condition (Rain, Clear, etc.)
+    description: string;        // Detailed weather description
+    icon: string;               // Weather icon code
+    uvIndex?: number;           // UV index (optional)
+    timestamp: string;          // ISO timestamp of the weather data
 }
 
 /**
- * Weather Service for fetching weather data from OpenWeatherMap API
+ * Service for fetching weather data from OpenWeatherMap
  */
 export class WeatherService {
-    private readonly baseUrl = 'https://api.openweathermap.org/data/2.5';
-    private readonly oneCallUrl = 'https://api.openweathermap.org/data/3.0';
-    private readonly apiKey: string;
+    private weatherCache: Map<string, WeatherData>;
+    private cacheExpiryMs: number = 30 * 60 * 1000; // 30 minutes
 
     constructor() {
-        this.apiKey = config.OPENWEATHERMAP_API_KEY;
+        this.weatherCache = new Map();
 
-        if (!this.apiKey) {
-            throw new Error('OPENWEATHERMAP_API_KEY is required but not configured');
-        }
+        // Clear expired cache entries every 15 minutes
+        setInterval(() => this.cleanupCache(), 15 * 60 * 1000);
     }
 
     /**
-     * Get current weather for coordinates
-     */
-    async getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
-        try {
-            console.log(`🌤️ Fetching current weather for ${lat}, ${lon}`);
-
-            const url = `${this.baseUrl}/weather?lat=${lat}&lon=${lon}&appid=${this.apiKey}&units=imperial`;
-
-            const response = await fetch(url);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`OpenWeather API error (${response.status}): ${errorText}`);
-            }
-
-            const data: WeatherApiResponse = await response.json();
-
-            const weatherData = this.transformCurrentWeatherData(data);
-
-            console.log(`✅ Weather data fetched successfully: ${weatherData.temperature}°F, ${weatherData.description}`);
-
-            return weatherData;
-
-        } catch (error) {
-            console.error('Failed to fetch current weather:', error);
-            throw new Error(`Weather fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }
-
-    /**
-     * Get historical weather for a specific timestamp and coordinates
-     * Note: Requires OpenWeather One Call API 3.0 subscription for historical data
-     */
-    async getHistoricalWeather(lat: number, lon: number, timestamp: number): Promise<WeatherData> {
-        try {
-            console.log(`🕒 Fetching historical weather for ${lat}, ${lon} at ${new Date(timestamp * 1000).toISOString()}`);
-
-            // For historical data, try One Call API 3.0 first
-            try {
-                const url = `${this.oneCallUrl}/onecall/timemachine?lat=${lat}&lon=${lon}&dt=${timestamp}&appid=${this.apiKey}&units=imperial`;
-
-                const response = await fetch(url);
-
-                if (response.ok) {
-                    const data: HistoricalWeatherResponse = await response.json();
-                    const weatherData = this.transformHistoricalWeatherData(data, lat, lon);
-
-                    console.log(`✅ Historical weather data fetched: ${weatherData.temperature}°F, ${weatherData.description}`);
-
-                    return weatherData;
-                } else if (response.status === 401) {
-                    console.log('⚠️ One Call API not available, falling back to current weather approximation');
-                } else {
-                    throw new Error(`Historical weather API error: ${response.status}`);
-                }
-            } catch (oneCallError) {
-                console.log('⚠️ One Call API failed, falling back to current weather:', oneCallError);
-            }
-
-            // Fallback: Use current weather if historical is not available
-            console.log('📍 Using current weather as approximation for historical data');
-            const currentWeather = await this.getCurrentWeather(lat, lon);
-
-            // Update timestamp to requested time
-            return {
-                ...currentWeather,
-                timestamp: new Date(timestamp * 1000).toISOString(),
-            };
-
-        } catch (error) {
-            console.error('Failed to fetch historical weather:', error);
-            throw new Error(`Historical weather fetch failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }
-
-    /**
-     * Get weather for activity based on start coordinates and time
+     * Get weather data for a specific activity
      */
     async getWeatherForActivity(
-        startLat: number,
-        startLon: number,
-        startTime: Date,
-        activityId: string | number
+        lat: number,
+        lon: number,
+        activityTime: Date,
+        activityId: string
     ): Promise<WeatherData> {
-        try {
-            console.log(`🏃 Getting weather for activity ${activityId} at ${startTime.toISOString()}`);
+        const cacheKey = this.getCacheKey(lat, lon, activityTime, activityId);
+        const cached = this.weatherCache.get(cacheKey);
 
-            const timestamp = Math.floor(startTime.getTime() / 1000);
-            const now = Math.floor(Date.now() / 1000);
-            const hoursSinceActivity = (now - timestamp) / 3600;
+        if (cached) {
+            console.log(`🎯 Weather cache hit for activity ${activityId}`);
+            return cached;
+        }
+
+        console.log(`🌤️ Fetching weather for activity ${activityId} at ${lat}, ${lon}`);
+
+        try {
+            const now = new Date();
+            const timeDiff = now.getTime() - activityTime.getTime();
+            const isHistorical = timeDiff > 3 * 60 * 60 * 1000; // More than 3 hours ago
 
             let weatherData: WeatherData;
 
-            if (hoursSinceActivity <= 2) {
-                // Activity is very recent, use current weather
-                console.log(`📍 Activity is recent (${hoursSinceActivity.toFixed(1)}h ago), using current weather`);
-                weatherData = await this.getCurrentWeather(startLat, startLon);
+            if (isHistorical && timeDiff <= 5 * 24 * 60 * 60 * 1000) {
+                // Use One Call Time Machine for historical data (up to 5 days)
+                weatherData = await this.getHistoricalWeather(lat, lon, activityTime);
             } else {
-                // Activity is older, try historical weather
-                console.log(`🕒 Activity is ${hoursSinceActivity.toFixed(1)}h old, fetching historical weather`);
-                weatherData = await this.getHistoricalWeather(startLat, startLon, timestamp);
+                // Use current weather API
+                weatherData = await this.getCurrentWeather(lat, lon);
             }
 
-            console.log(`✅ Weather retrieved for activity ${activityId}: ${weatherData.temperature}°F, ${weatherData.description}`);
+            // Cache the result
+            this.weatherCache.set(cacheKey, weatherData);
 
             return weatherData;
 
         } catch (error) {
-            console.error(`Failed to get weather for activity ${activityId}:`, error);
-            throw error;
+            console.error('Weather service error:', error);
+            throw new Error(`Failed to fetch weather data: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
     /**
-     * Transform OpenWeather current weather response to our format
+     * Get current weather data
      */
-    private transformCurrentWeatherData(data: WeatherApiResponse): WeatherData {
-        const weather = data.weather?.[0];
+    private async getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
+        const url = `${config.OPENWEATHERMAP_API_BASE_URL}/weather`;
+        const params = {
+            lat: lat.toString(),
+            lon: lon.toString(),
+            appid: config.OPENWEATHERMAP_API_KEY,
+            units: 'metric'
+        };
 
-        if (!weather) {
-            throw new Error('No weather data found in API response');
-        }
+        const response = await axios.get(url, { params, timeout: 5000 });
+        const data = response.data;
 
         return {
             temperature: Math.round(data.main.temp),
             temperatureFeel: Math.round(data.main.feels_like),
             humidity: data.main.humidity,
             pressure: data.main.pressure,
-            windSpeed: Math.round(data.wind.speed * 10) / 10, // Round to 1 decimal
+            windSpeed: Math.round(data.wind.speed),
             windDirection: data.wind.deg,
-            windGust: data.wind.gust ? Math.round(data.wind.gust * 10) / 10 : 0, // Default to 0 instead of undefined
-            visibility: Math.round((data.visibility / 1609.34) * 10) / 10, // Convert m to miles, 1 decimal
+            windGust: data.wind.gust ? Math.round(data.wind.gust) : undefined,
             cloudCover: data.clouds.all,
-            description: weather.description,
-            icon: weather.icon,
-            condition: weather.main,
-            timestamp: new Date(data.dt * 1000).toISOString(),
-            location: {
-                lat: data.coord.lat,
-                lon: data.coord.lon,
-            },
-            source: 'openweather' as const,
+            visibility: Math.round(data.visibility / 1000),
+            condition: data.weather[0].main,
+            description: data.weather[0].description,
+            icon: data.weather[0].icon,
+            uvIndex: 0, // Not available in current weather API
+            timestamp: new Date().toISOString(),
         };
     }
 
     /**
-     * Transform OpenWeather historical weather response to our format
+     * Get historical weather data using One Call Time Machine API
      */
-    private transformHistoricalWeatherData(data: HistoricalWeatherResponse, lat: number, lon: number): WeatherData {
-        const weatherPoint = data.data?.[0]; // Safe array access
+    private async getHistoricalWeather(lat: number, lon: number, time: Date): Promise<WeatherData> {
+        const url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine`;
+        const dt = Math.floor(time.getTime() / 1000);
 
-        if (!weatherPoint) {
-            throw new Error('No historical weather data found in API response');
-        }
+        const params = {
+            lat: lat.toString(),
+            lon: lon.toString(),
+            dt: dt.toString(),
+            appid: config.OPENWEATHERMAP_API_KEY,
+            units: 'metric'
+        };
 
-        const weather = weatherPoint.weather?.[0];
+        const response = await axios.get(url, { params, timeout: 5000 });
+        const data = response.data;
 
-        if (!weather) {
-            throw new Error('No weather details found in historical data');
-        }
+        // Get the data point closest to the activity time
+        const hourlyData = data.hourly || [];
+        const targetHour = hourlyData.reduce((closest: any, current: any) => {
+            const closestDiff = Math.abs(closest.dt - dt);
+            const currentDiff = Math.abs(current.dt - dt);
+            return currentDiff < closestDiff ? current : closest;
+        }, hourlyData[0] || data.current);
+
+        const weatherPoint = targetHour || data.current;
 
         return {
             temperature: Math.round(weatherPoint.temp),
             temperatureFeel: Math.round(weatherPoint.feels_like),
             humidity: weatherPoint.humidity,
             pressure: weatherPoint.pressure,
-            windSpeed: Math.round(weatherPoint.wind_speed * 10) / 10,
+            windSpeed: Math.round(weatherPoint.wind_speed),
             windDirection: weatherPoint.wind_deg,
-            windGust: weatherPoint.wind_gust ? Math.round(weatherPoint.wind_gust * 10) / 10 : 0, // Default to 0
-            visibility: Math.round((weatherPoint.visibility / 1609.34) * 10) / 10, // Convert m to miles
+            windGust: weatherPoint.wind_gust ? Math.round(weatherPoint.wind_gust) : undefined,
             cloudCover: weatherPoint.clouds,
-            uvIndex: weatherPoint.uvi ?? 0, // Default to 0 if undefined
-            description: weather.description,
-            icon: weather.icon,
-            condition: weather.main,
+            visibility: Math.round((weatherPoint.visibility || 10000) / 1000),
+            condition: weatherPoint.weather[0].main,
+            description: weatherPoint.weather[0].description,
+            icon: weatherPoint.weather[0].icon,
+            uvIndex: weatherPoint.uvi || 0,
             timestamp: new Date(weatherPoint.dt * 1000).toISOString(),
-            location: {
-                lat,
-                lon,
-            },
-            source: 'openweather' as const,
         };
     }
 
     /**
-     * Format weather data for Strava activity description
+     * Generate cache key for weather data
      */
-    static formatWeatherForStrava(weather: WeatherData): string {
-        const tempSymbol = '🌡️';
-        const windSymbol = '💨';
-        const humiditySymbol = '💧';
+    private getCacheKey(lat: number, lon: number, time: Date, activityId: string): string {
+        // Round coordinates to 2 decimal places to allow some variance
+        const roundedLat = Math.round(lat * 100) / 100;
+        const roundedLon = Math.round(lon * 100) / 100;
 
-        const parts = [
-            `${tempSymbol} ${weather.temperature}°F (feels like ${weather.temperatureFeel}°F)`,
-            `${windSymbol} ${weather.windSpeed} mph`,
-            `${humiditySymbol} ${weather.humidity}%`,
-            `☁️ ${weather.description}`,
-        ];
+        // Round time to nearest hour for better cache hits
+        const hourTime = new Date(time);
+        hourTime.setMinutes(0, 0, 0);
 
-        return `\n\n🌤️ Weather:\n${parts.join('\n')}`;
+        return `weather:${roundedLat}:${roundedLon}:${hourTime.getTime()}:${activityId}`;
     }
 
     /**
-     * Get weather emoji based on condition
+     * Clean up expired cache entries
+     */
+    private cleanupCache(): void {
+        const now = Date.now();
+        let cleaned = 0;
+
+        for (const [key, value] of this.weatherCache.entries()) {
+            const cacheTime = new Date(value.timestamp).getTime();
+            if (now - cacheTime > this.cacheExpiryMs) {
+                this.weatherCache.delete(key);
+                cleaned++;
+            }
+        }
+
+        if (cleaned > 0) {
+            console.log(`🧹 Cleaned ${cleaned} expired weather cache entries`);
+        }
+    }
+
+    /**
+     * Get weather emoji based on condition and icon
+     * Static method so it can be used elsewhere
      */
     static getWeatherEmoji(condition: string, icon: string): string {
-        const conditionLower = condition.toLowerCase();
+        // Map OpenWeatherMap icons to emojis
+        const iconMap: Record<string, string> = {
+            '01d': '☀️',  // clear sky day
+            '01n': '🌙',  // clear sky night
+            '02d': '⛅',  // few clouds day
+            '02n': '☁️',  // few clouds night
+            '03d': '☁️',  // scattered clouds
+            '03n': '☁️',
+            '04d': '☁️',  // broken clouds
+            '04n': '☁️',
+            '09d': '🌧️',  // shower rain
+            '09n': '🌧️',
+            '10d': '🌦️',  // rain day
+            '10n': '🌧️',  // rain night
+            '11d': '⛈️',  // thunderstorm
+            '11n': '⛈️',
+            '13d': '❄️',  // snow
+            '13n': '❄️',
+            '50d': '🌫️',  // mist
+            '50n': '🌫️',
+        };
 
-        if (conditionLower.includes('clear')) return '☀️';
-        if (conditionLower.includes('cloud')) return '☁️';
-        if (conditionLower.includes('rain')) return '🌧️';
-        if (conditionLower.includes('snow')) return '❄️';
-        if (conditionLower.includes('thunder')) return '⛈️';
-        if (conditionLower.includes('mist') || conditionLower.includes('fog')) return '🌫️';
-        if (conditionLower.includes('drizzle')) return '🌦️';
+        return iconMap[icon] || '🌤️';
+    }
 
-        // Fallback to icon-based detection
-        if (icon.includes('01')) return '☀️'; // clear sky
-        if (icon.includes('02')) return '⛅'; // few clouds
-        if (icon.includes('03') || icon.includes('04')) return '☁️'; // scattered/broken clouds
-        if (icon.includes('09') || icon.includes('10')) return '🌧️'; // rain
-        if (icon.includes('11')) return '⛈️'; // thunderstorm
-        if (icon.includes('13')) return '❄️'; // snow
-        if (icon.includes('50')) return '🌫️'; // mist
-
-        return '🌤️'; // default
+    /**
+     * Clear the cache (useful for testing)
+     */
+    clearCache(): void {
+        this.weatherCache.clear();
+        console.log('🧹 Weather cache cleared');
     }
 }
 

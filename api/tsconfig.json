@@ -14,24 +14,21 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["./src/*"]
-    },
+    "rootDir": "./",
     "types": ["node", "jest"],
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": false
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "api/**/*",
+    "scripts/**/*"
   ],
   "exclude": [
     "node_modules",

@@ -37,11 +37,13 @@ export class ActivityProcessor {
     private hasWeatherData(description?: string): boolean {
         if (!description) return false;
 
-        // Check for weather indicators in description
-        return description.includes('🌤️ Weather:') ||
+        return description.includes('°C') ||
+            description.includes('Feels like') ||
+            description.includes('Humidity') ||
+            description.includes('m/s from') ||
+            description.includes('🌤️ Weather:') ||
             description.includes('Weather:') ||
-            description.includes('°F') ||
-            description.includes('°C');
+            description.includes('°F');
     }
 
     /**
@@ -306,41 +308,43 @@ export class ActivityProcessor {
         const originalDescription = activity.description || '';
 
         // Remove any existing weather data (in case we're updating)
-        const cleanDescription = originalDescription.replace(/\n*🌤️ Weather:[\s\S]*$/, '').trim();
+        const cleanDescription = originalDescription
+            .replace(/\n*[A-Z][^,]+, \d+°C, Feels like.*from [NSEW]+/g, '')
+            .replace(/\n*🌤️ Weather:[\s\S]*$/, '')
+            .trim();
 
-        // Create weather section
-        const weatherEmoji = WeatherService.getWeatherEmoji(weatherData.condition, weatherData.icon);
+        // "Light rain, 10°C, Feels like 10°C, Humidity 91%, Wind 2m/s from WSW"
+        const condition = weatherData.description.charAt(0).toUpperCase() + weatherData.description.slice(1);
 
-        const weatherSection = [
-            '',
-            '🌤️ Weather:',
-            `${weatherEmoji} ${weatherData.description}`,
-            `🌡️ ${weatherData.temperature}°F (feels like ${weatherData.temperatureFeel}°F)`,
-            `💨 Wind: ${weatherData.windSpeed} mph`,
-            `💧 Humidity: ${weatherData.humidity}%`,
-            `☁️ Clouds: ${weatherData.cloudCover}%`,
-        ];
-
-        if (weatherData.windGust && weatherData.windGust > weatherData.windSpeed + 5) {
-            weatherSection.splice(-3, 0, `💨 Gusts: ${weatherData.windGust} mph`);
-        }
-
-        if (weatherData.uvIndex && weatherData.uvIndex > 0) {
-            weatherSection.push(`☀️ UV Index: ${weatherData.uvIndex}`);
-        }
-
-        // Add timestamp for reference
-        const weatherTime = new Date(weatherData.timestamp);
-        weatherSection.push(`📅 ${weatherTime.toLocaleString('en-US', {
-            timeZone: 'America/New_York',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit'
-        })}`);
+        const weatherLine = [
+            condition,
+            `${Math.round((weatherData.temperature - 32) * 5/9)}°C`, // Convert F to C
+            `Feels like ${Math.round((weatherData.temperatureFeel - 32) * 5/9)}°C`, // Convert F to C
+            `Humidity ${weatherData.humidity}%`,
+            `Wind ${Math.round(weatherData.windSpeed * 0.44704)}m/s from ${this.getWindDirection(weatherData.windDirection)}` // Convert mph to m/s
+        ].join(', ');
 
         // Combine original description with weather data
-        return cleanDescription + '\n' + weatherSection.join('\n');
+        if (cleanDescription) {
+            return `${cleanDescription}\n\n${weatherLine}`;
+        } else {
+            return weatherLine;
+        }
+    }
+
+    /**
+     * Convert wind direction degrees to compass direction
+     * (Add this helper method if it doesn't exist)
+     */
+    private getWindDirection(degrees: number | string): string {
+        // If already a string direction, return it
+        if (typeof degrees === 'string') {
+            return degrees;
+        }
+
+        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const index = Math.round(degrees / 22.5) % 16;
+        return directions[index] || 'N';
     }
 
     /**

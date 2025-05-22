@@ -21,6 +21,7 @@ interface StravaActivity {
 
 interface WeatherData {
     temperature: number;
+    temperatureFeel: number;
     condition: string;
     humidity: number;
     windSpeed: number;
@@ -75,7 +76,7 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
         }
 
         // Step 4: Check if weather already added (prevent duplicates)
-        if (activity.description?.includes('🌤️') || activity.description?.includes('°F')) {
+        if (hasWeatherInDescription(activity.description)) {
             console.log(`⚠️ Weather already added to activity ${activity.id}`);
             return;
         }
@@ -109,6 +110,19 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
         // TODO: When we scale, implement retry logic here
         // For now, we just log and move on
     }
+}
+
+/**
+ * Check if weather already added (prevent duplicates)
+ * Updated to check for °C instead of °F
+ */
+function hasWeatherInDescription(description: string | null): boolean {
+    if (!description) return false;
+    // Check for temperature patterns with °C or weather keywords
+    return description.includes('°C') ||
+        description.includes('Feels like') ||
+        description.includes('Humidity') ||
+        description.includes('m/s from');
 }
 
 /**
@@ -160,10 +174,10 @@ async function fetchWeatherData(lat: number, lon: number, date: Date): Promise<W
         if (isHistorical) {
             // Use historical weather data (limited to last 5 days for free tier)
             const timestamp = Math.floor(date.getTime() / 1000);
-            url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine?lat=${lat}&lon=${lon}&dt=${timestamp}&appid=${config.OPENWEATHERMAP_API_KEY}&units=imperial`;
+            url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine?lat=${lat}&lon=${lon}&dt=${timestamp}&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
         } else {
             // Use current weather
-            url = `${config.OPENWEATHERMAP_API_BASE_URL}/weather?lat=${lat}&lon=${lon}&appid=${config.OPENWEATHERMAP_API_KEY}&units=imperial`;
+            url = `${config.OPENWEATHERMAP_API_BASE_URL}/weather?lat=${lat}&lon=${lon}&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
         }
 
         const response = await axios.get(url, {
@@ -179,23 +193,25 @@ async function fetchWeatherData(lat: number, lon: number, date: Date): Promise<W
 
             return {
                 temperature: Math.round(weather.temp || 0),
+                temperatureFeel: Math.round(weather.feels_like || weather.temp || 0),
                 condition: weather.weather?.[0]?.description || 'Unknown',
                 humidity: weather.humidity || 0,
-                windSpeed: Math.round((weather.wind_speed || 0) * 2.237), // m/s to mph
+                windSpeed: Math.round(weather.wind_speed || 0),
                 windDirection: getWindDirection(weather.wind_deg || 0),
                 pressure: Math.round(weather.pressure || 0),
-                visibility: Math.round((weather.visibility || 0) * 0.000621371), // meters to miles
+                visibility: Math.round((weather.visibility || 0) / 1000),
                 uvIndex: weather.uvi,
             };
         } else {
             return {
                 temperature: Math.round(data.main?.temp || 0),
+                temperatureFeel: Math.round(data.main?.feels_like || data.main?.temp || 0),
                 condition: data.weather?.[0]?.description || 'Unknown',
                 humidity: data.main?.humidity || 0,
-                windSpeed: Math.round((data.wind?.speed || 0) * 2.237), // m/s to mph
+                windSpeed: Math.round(data.wind?.speed || 0),
                 windDirection: getWindDirection(data.wind?.deg || 0),
                 pressure: Math.round(data.main?.pressure || 0),
-                visibility: Math.round((data.visibility || 0) * 0.000621371), // meters to miles
+                visibility: Math.round((data.visibility || 0) / 1000),
             };
         }
 
@@ -216,13 +232,17 @@ function getWindDirection(degrees: number): string {
 
 /**
  * Format weather data into readable description
+ * Format: "Light rain, 10°C, Feels like 10°C, Humidity 91%, Wind 2m/s from WSW"
  */
 function formatWeatherDescription(weather: WeatherData): string {
+    const condition = weather.condition.charAt(0).toUpperCase() + weather.condition.slice(1);
+
     const parts = [
-        `🌤️ ${weather.temperature}°F`,
-        weather.condition,
-        `${weather.humidity}% humidity`,
-        `${weather.windSpeed}mph ${weather.windDirection} winds`,
+        condition,
+        `${weather.temperature}°C`,
+        `Feels like ${weather.temperatureFeel}°C`,
+        `Humidity ${weather.humidity}%`,
+        `Wind ${weather.windSpeed}m/s from ${weather.windDirection}`,
     ];
 
     return parts.join(', ');
