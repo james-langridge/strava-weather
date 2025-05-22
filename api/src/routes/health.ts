@@ -175,11 +175,14 @@ async function checkWeatherAPI(): Promise<ServiceStatus> {
     const startTime = Date.now();
 
     try {
-        // Test request to OpenWeatherMap API
-        const testUrl = `${config.OPENWEATHERMAP_API_BASE_URL}/weather?lat=0&lon=0&appid=${config.OPENWEATHERMAP_API_KEY}`;
+        // Test request to One Call API with test coordinates
+        const testUrl = `${config.OPENWEATHERMAP_ONECALL_URL}?lat=0&lon=0&appid=${config.OPENWEATHERMAP_API_KEY}&exclude=minutely,hourly,daily,alerts`;
         const response = await fetch(testUrl);
 
-        const isAccessible = response.status === 200 || response.status === 400; // 400 is acceptable (invalid coords)
+        // One Call API returns 400 for invalid coordinates (0,0) which is acceptable
+        // 200 would mean valid coordinates
+        // 401 would mean invalid API key
+        const isAccessible = response.status === 200 || response.status === 400;
 
         return {
             status: isAccessible ? 'healthy' : 'unhealthy',

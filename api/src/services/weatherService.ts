@@ -1,5 +1,3 @@
-// api/src/services/weatherService.ts
-
 import axios from 'axios';
 import { config } from '../config/environment.js';
 
@@ -21,7 +19,7 @@ export interface WeatherData {
 }
 
 /**
- * Service for fetching weather data from OpenWeatherMap
+ * Weather Service using One Call API 3.0 for maximum accuracy
  */
 export class WeatherService {
     private weatherCache: Map<string, WeatherData>;
@@ -29,13 +27,12 @@ export class WeatherService {
 
     constructor() {
         this.weatherCache = new Map();
-
-        // Clear expired cache entries every 15 minutes
         setInterval(() => this.cleanupCache(), 15 * 60 * 1000);
     }
 
     /**
      * Get weather data for a specific activity
+     * Always uses One Call API for best accuracy
      */
     async getWeatherForActivity(
         lat: number,
@@ -51,21 +48,29 @@ export class WeatherService {
             return cached;
         }
 
-        console.log(`🌤️ Fetching weather for activity ${activityId} at ${lat}, ${lon}`);
+        console.log(`🌤️ Fetching weather for activity ${activityId}`);
+        console.log(`📍 Coordinates: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+        console.log(`⏰ Activity time: ${activityTime.toISOString()}`);
 
         try {
             const now = new Date();
             const timeDiff = now.getTime() - activityTime.getTime();
-            const isHistorical = timeDiff > 3 * 60 * 60 * 1000; // More than 3 hours ago
+            const hoursSinceActivity = timeDiff / (1000 * 60 * 60);
 
             let weatherData: WeatherData;
 
-            if (isHistorical && timeDiff <= 5 * 24 * 60 * 60 * 1000) {
-                // Use One Call Time Machine for historical data (up to 5 days)
+            if (hoursSinceActivity > 1 && hoursSinceActivity <= 120) { // 1 hour to 5 days ago
+                // Use Time Machine for historical data
+                console.log(`🕐 Using Time Machine (activity ${hoursSinceActivity.toFixed(1)} hours ago)`);
                 weatherData = await this.getHistoricalWeather(lat, lon, activityTime);
+            } else if (hoursSinceActivity <= 1) {
+                // Use current data from One Call for very recent activities
+                console.log(`🔄 Using One Call current data (recent activity)`);
+                weatherData = await this.getCurrentWeatherFromOneCall(lat, lon);
             } else {
-                // Use current weather API
-                weatherData = await this.getCurrentWeather(lat, lon);
+                // Activity too old for Time Machine, use current as fallback
+                console.log(`⚠️ Activity too old for historical data, using current weather`);
+                weatherData = await this.getCurrentWeatherFromOneCall(lat, lon);
             }
 
             // Cache the result
@@ -80,97 +85,112 @@ export class WeatherService {
     }
 
     /**
-     * Get current weather data
+     * Get current weather using One Call API
+     * More accurate than the basic weather endpoint
      */
-    private async getCurrentWeather(lat: number, lon: number): Promise<WeatherData> {
-        const url = `${config.OPENWEATHERMAP_API_BASE_URL}/weather`;
+    private async getCurrentWeatherFromOneCall(lat: number, lon: number): Promise<WeatherData> {
+        const url = config.OPENWEATHERMAP_ONECALL_URL;
         const params = {
-            lat: lat.toString(),
-            lon: lon.toString(),
+            lat: lat.toFixed(6),
+            lon: lon.toFixed(6),
             appid: config.OPENWEATHERMAP_API_KEY,
-            units: 'metric'
+            units: 'metric',
+            exclude: 'minutely,hourly,daily,alerts' // Only need current data
         };
 
+        console.log(`🎯 Using One Call API for current conditions`);
+
         const response = await axios.get(url, { params, timeout: 5000 });
-        const data = response.data;
+        const current = response.data.current;
+
+        // Log for debugging
+        console.log(`📊 One Call Response:`, {
+            temp: `${current.temp}°C`,
+            feels_like: `${current.feels_like}°C`,
+            humidity: `${current.humidity}%`,
+            wind: `${current.wind_speed}m/s from ${current.wind_deg}°`,
+            location: response.data.timezone
+        });
 
         return {
-            temperature: Math.round(data.main.temp),
-            temperatureFeel: Math.round(data.main.feels_like),
-            humidity: data.main.humidity,
-            pressure: data.main.pressure,
-            windSpeed: Math.round(data.wind.speed),
-            windDirection: data.wind.deg,
-            windGust: data.wind.gust ? Math.round(data.wind.gust) : undefined,
-            cloudCover: data.clouds.all,
-            visibility: Math.round(data.visibility / 1000),
-            condition: data.weather[0].main,
-            description: data.weather[0].description,
-            icon: data.weather[0].icon,
-            uvIndex: 0, // Not available in current weather API
-            timestamp: new Date().toISOString(),
+            temperature: Math.round(current.temp),
+            temperatureFeel: Math.round(current.feels_like),
+            humidity: current.humidity,
+            pressure: current.pressure,
+            windSpeed: Math.round(current.wind_speed * 10) / 10, // 1 decimal place
+            windDirection: current.wind_deg,
+            windGust: current.wind_gust ? Math.round(current.wind_gust * 10) / 10 : undefined,
+            cloudCover: current.clouds,
+            visibility: Math.round(current.visibility / 1000), // Convert to km
+            condition: current.weather[0].main,
+            description: current.weather[0].description,
+            icon: current.weather[0].icon,
+            uvIndex: current.uvi || 0,
+            timestamp: new Date(current.dt * 1000).toISOString(),
         };
     }
 
     /**
-     * Get historical weather data using One Call Time Machine API
+     * Get historical weather using One Call Time Machine
+     * For activities 1 hour to 5 days in the past
      */
     private async getHistoricalWeather(lat: number, lon: number, time: Date): Promise<WeatherData> {
         const url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine`;
         const dt = Math.floor(time.getTime() / 1000);
 
         const params = {
-            lat: lat.toString(),
-            lon: lon.toString(),
+            lat: lat.toFixed(6),
+            lon: lon.toFixed(6),
             dt: dt.toString(),
             appid: config.OPENWEATHERMAP_API_KEY,
             units: 'metric'
         };
 
+        console.log(`📜 Using Time Machine for ${time.toISOString()}`);
+
         const response = await axios.get(url, { params, timeout: 5000 });
-        const data = response.data;
+        const data = response.data.data[0]; // Time Machine returns array with single item
 
-        // Get the data point closest to the activity time
-        const hourlyData = data.hourly || [];
-        const targetHour = hourlyData.reduce((closest: any, current: any) => {
-            const closestDiff = Math.abs(closest.dt - dt);
-            const currentDiff = Math.abs(current.dt - dt);
-            return currentDiff < closestDiff ? current : closest;
-        }, hourlyData[0] || data.current);
-
-        const weatherPoint = targetHour || data.current;
+        // Log for debugging
+        console.log(`📊 Time Machine Response:`, {
+            temp: `${data.temp}°C`,
+            feels_like: `${data.feels_like}°C`,
+            humidity: `${data.humidity}%`,
+            wind: `${data.wind_speed}m/s from ${data.wind_deg}°`,
+            time: new Date(data.dt * 1000).toISOString()
+        });
 
         return {
-            temperature: Math.round(weatherPoint.temp),
-            temperatureFeel: Math.round(weatherPoint.feels_like),
-            humidity: weatherPoint.humidity,
-            pressure: weatherPoint.pressure,
-            windSpeed: Math.round(weatherPoint.wind_speed),
-            windDirection: weatherPoint.wind_deg,
-            windGust: weatherPoint.wind_gust ? Math.round(weatherPoint.wind_gust) : undefined,
-            cloudCover: weatherPoint.clouds,
-            visibility: Math.round((weatherPoint.visibility || 10000) / 1000),
-            condition: weatherPoint.weather[0].main,
-            description: weatherPoint.weather[0].description,
-            icon: weatherPoint.weather[0].icon,
-            uvIndex: weatherPoint.uvi || 0,
-            timestamp: new Date(weatherPoint.dt * 1000).toISOString(),
+            temperature: Math.round(data.temp),
+            temperatureFeel: Math.round(data.feels_like),
+            humidity: data.humidity,
+            pressure: data.pressure,
+            windSpeed: Math.round(data.wind_speed * 10) / 10, // 1 decimal place
+            windDirection: data.wind_deg,
+            windGust: data.wind_gust ? Math.round(data.wind_gust * 10) / 10 : undefined,
+            cloudCover: data.clouds,
+            visibility: Math.round((data.visibility || 10000) / 1000), // Convert to km
+            condition: data.weather[0].main,
+            description: data.weather[0].description,
+            icon: data.weather[0].icon,
+            uvIndex: data.uvi || 0,
+            timestamp: new Date(data.dt * 1000).toISOString(),
         };
     }
 
     /**
-     * Generate cache key for weather data
+     * Generate cache key with high precision
      */
     private getCacheKey(lat: number, lon: number, time: Date, activityId: string): string {
-        // Round coordinates to 2 decimal places to allow some variance
-        const roundedLat = Math.round(lat * 100) / 100;
-        const roundedLon = Math.round(lon * 100) / 100;
+        // Use 4 decimal places for ~11m precision
+        const roundedLat = Math.round(lat * 10000) / 10000;
+        const roundedLon = Math.round(lon * 10000) / 10000;
 
-        // Round time to nearest hour for better cache hits
-        const hourTime = new Date(time);
-        hourTime.setMinutes(0, 0, 0);
+        // Round time to nearest 15 minutes
+        const quarterHour = new Date(time);
+        quarterHour.setMinutes(Math.floor(quarterHour.getMinutes() / 15) * 15, 0, 0);
 
-        return `weather:${roundedLat}:${roundedLon}:${hourTime.getTime()}:${activityId}`;
+        return `weather:${roundedLat}:${roundedLon}:${quarterHour.getTime()}:${activityId}`;
     }
 
     /**
@@ -194,41 +214,25 @@ export class WeatherService {
     }
 
     /**
-     * Get weather emoji based on condition and icon
-     * Static method so it can be used elsewhere
-     */
-    static getWeatherEmoji(condition: string, icon: string): string {
-        // Map OpenWeatherMap icons to emojis
-        const iconMap: Record<string, string> = {
-            '01d': '☀️',  // clear sky day
-            '01n': '🌙',  // clear sky night
-            '02d': '⛅',  // few clouds day
-            '02n': '☁️',  // few clouds night
-            '03d': '☁️',  // scattered clouds
-            '03n': '☁️',
-            '04d': '☁️',  // broken clouds
-            '04n': '☁️',
-            '09d': '🌧️',  // shower rain
-            '09n': '🌧️',
-            '10d': '🌦️',  // rain day
-            '10n': '🌧️',  // rain night
-            '11d': '⛈️',  // thunderstorm
-            '11n': '⛈️',
-            '13d': '❄️',  // snow
-            '13n': '❄️',
-            '50d': '🌫️',  // mist
-            '50n': '🌫️',
-        };
-
-        return iconMap[icon] || '🌤️';
-    }
-
-    /**
      * Clear the cache (useful for testing)
      */
     clearCache(): void {
         this.weatherCache.clear();
         console.log('🧹 Weather cache cleared');
+    }
+
+    /**
+     * Get weather emoji based on condition and icon
+     */
+    static getWeatherEmoji(condition: string, icon: string): string {
+        const iconMap: Record<string, string> = {
+            '01d': '☀️', '01n': '🌙', '02d': '⛅', '02n': '☁️',
+            '03d': '☁️', '03n': '☁️', '04d': '☁️', '04n': '☁️',
+            '09d': '🌧️', '09n': '🌧️', '10d': '🌦️', '10n': '🌧️',
+            '11d': '⛈️', '11n': '⛈️', '13d': '❄️', '13n': '❄️',
+            '50d': '🌫️', '50n': '🌫️',
+        };
+        return iconMap[icon] || '🌤️';
     }
 }
 

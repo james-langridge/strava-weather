@@ -166,51 +166,77 @@ async function fetchStravaActivity(activityId: string, accessToken: string): Pro
 async function fetchWeatherData(lat: number, lon: number, date: Date): Promise<WeatherData | null> {
     try {
         const now = new Date();
-        const isHistorical = date < new Date(now.getTime() - 5 * 60 * 1000); // More than 5 minutes ago
+        const timeDiff = now.getTime() - date.getTime();
+        const hoursSinceActivity = timeDiff / (1000 * 60 * 60);
 
         let url: string;
+        let params: any;
 
-        if (isHistorical) {
-            // Use historical weather data (limited to last 5 days for free tier)
+        if (hoursSinceActivity > 1 && hoursSinceActivity <= 120) { // 1 hour to 5 days ago
+            // Use Time Machine for historical data
             const timestamp = Math.floor(date.getTime() / 1000);
-            url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine?lat=${lat}&lon=${lon}&dt=${timestamp}&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
+            url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine`;
+            params = {
+                lat: lat.toFixed(6),
+                lon: lon.toFixed(6),
+                dt: timestamp,
+                appid: config.OPENWEATHERMAP_API_KEY,
+                units: 'metric'
+            };
+
+            console.log(`🕐 Using Time Machine for ${date.toISOString()}`);
         } else {
-            // Use current weather
-            url = `${config.OPENWEATHERMAP_API_BASE_URL}/weather?lat=${lat}&lon=${lon}&appid=${config.OPENWEATHERMAP_API_KEY}&units=metric`;
+            // Use One Call current data
+            url = config.OPENWEATHERMAP_ONECALL_URL;
+            params = {
+                lat: lat.toFixed(6),
+                lon: lon.toFixed(6),
+                appid: config.OPENWEATHERMAP_API_KEY,
+                units: 'metric',
+                exclude: 'minutely,hourly,daily,alerts'
+            };
+
+            console.log(`🔄 Using One Call current data`);
         }
 
         const response = await axios.get(url, {
+            params,
             timeout: 5000,
         });
 
-        const {data} = response;
+        const { data } = response;
 
         // Parse response based on endpoint
-        if (isHistorical) {
+        if (url.includes('timemachine')) {
+            // Time Machine response
             const weather = data.data?.[0];
             if (!weather) return null;
 
             return {
-                temperature: Math.round(weather.temp || 0),
-                temperatureFeel: Math.round(weather.feels_like || weather.temp || 0),
+                temperature: Math.round(weather.temp),
+                temperatureFeel: Math.round(weather.feels_like),
                 condition: weather.weather?.[0]?.description || 'Unknown',
-                humidity: weather.humidity || 0,
-                windSpeed: Math.round(weather.wind_speed || 0),
-                windDirection: getWindDirection(weather.wind_deg || 0),
-                pressure: Math.round(weather.pressure || 0),
-                visibility: Math.round((weather.visibility || 0) / 1000),
+                humidity: weather.humidity,
+                windSpeed: Math.round(weather.wind_speed * 10) / 10, // Keep 1 decimal
+                windDirection: getWindDirection(weather.wind_deg),
+                pressure: Math.round(weather.pressure),
+                visibility: Math.round((weather.visibility || 10000) / 1000), // km
                 uvIndex: weather.uvi,
             };
         } else {
+            // One Call current response
+            const current = data.current;
+
             return {
-                temperature: Math.round(data.main?.temp || 0),
-                temperatureFeel: Math.round(data.main?.feels_like || data.main?.temp || 0),
-                condition: data.weather?.[0]?.description || 'Unknown',
-                humidity: data.main?.humidity || 0,
-                windSpeed: Math.round(data.wind?.speed || 0),
-                windDirection: getWindDirection(data.wind?.deg || 0),
-                pressure: Math.round(data.main?.pressure || 0),
-                visibility: Math.round((data.visibility || 0) / 1000),
+                temperature: Math.round(current.temp),
+                temperatureFeel: Math.round(current.feels_like),
+                condition: current.weather?.[0]?.description || 'Unknown',
+                humidity: current.humidity,
+                windSpeed: Math.round(current.wind_speed * 10) / 10, // Keep 1 decimal
+                windDirection: getWindDirection(current.wind_deg),
+                pressure: Math.round(current.pressure),
+                visibility: Math.round(current.visibility / 1000), // km
+                uvIndex: current.uvi,
             };
         }
 
@@ -238,10 +264,10 @@ function formatWeatherDescription(weather: WeatherData): string {
 
     const parts = [
         condition,
-        `${weather.temperature}°C`,                    // Already in Celsius from API
-        `Feels like ${weather.temperatureFeel}°C`,     // Already in Celsius from API
+        `${weather.temperature}°C`,
+        `Feels like ${weather.temperatureFeel}°C`,
         `Humidity ${weather.humidity}%`,
-        `Wind ${weather.windSpeed}m/s from ${weather.windDirection}`, // Already in m/s from API
+        `Wind ${weather.windSpeed}m/s from ${weather.windDirection}`,
     ];
 
     return parts.join(', ');

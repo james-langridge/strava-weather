@@ -307,18 +307,14 @@ export class ActivityProcessor {
     private createWeatherDescription(activity: ActivityData, weatherData: WeatherData): string {
         const originalDescription = activity.description || '';
 
-        // Remove any existing weather data (in case we're updating)
         const cleanDescription = originalDescription
-            .replace(/\n*[A-Z][^,]+, -?\d+°C, Feels like.*from [NSEW]+[NSEW]*/g, '') // Handle all wind directions
-            .replace(/\n*🌤️ Weather:[\s\S]*$/, '') // Remove old format with emoji
-            .replace(/\n\n+/g, '\n') // Clean up multiple newlines
+            .replace(/\n*[A-Z][^,]+, -?\d+°C, Feels like.*from [NSEW]+[NSEW]*/g, '')
+            .replace(/\n*🌤️ Weather:[\s\S]*$/, '')
+            .replace(/\n\n+/g, '\n')
             .trim();
 
-        // Create weather line in the requested format
-        // "Light rain, 10°C, Feels like 10°C, Humidity 91%, Wind 2m/s from WSW"
         const condition = weatherData.description.charAt(0).toUpperCase() + weatherData.description.slice(1);
 
-        // NO CONVERSION NEEDED - weatherData is already in Celsius!
         const weatherLine = [
             condition,
             `${weatherData.temperature}°C`,
@@ -327,7 +323,6 @@ export class ActivityProcessor {
             `Wind ${weatherData.windSpeed}m/s from ${this.getWindDirectionString(weatherData.windDirection)}`
         ].join(', ');
 
-        // Combine original description with weather data
         if (cleanDescription) {
             return `${cleanDescription}\n\n${weatherLine}`;
         } else {
