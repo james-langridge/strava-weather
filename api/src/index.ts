@@ -10,7 +10,7 @@ import { healthRouter } from './routes/health';
 import { stravaRouter } from './routes/strava';
 import { authRouter } from './routes/auth';
 import { usersRouter } from './routes/users';
-import { activitiesRouter } from './routes/activities'; // ← ADD THIS
+import { activitiesRouter } from './routes/activities';
 
 const app = express();
 
@@ -28,7 +28,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/strava', stravaRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
-app.use('/api/activities', activitiesRouter); // ← ADD THIS
+app.use('/api/activities', activitiesRouter);
 
 // Error handling
 app.use(errorHandler);
