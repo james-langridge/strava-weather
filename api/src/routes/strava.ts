@@ -1,8 +1,10 @@
+// api/src/routes/strava.ts
 import { Router, Request, Response, NextFunction } from 'express';
 import { config } from '../config/environment.js';
-import { prisma} from "../lib/index.js";
-import { activityProcessor } from '../services/activityProcessor.js';
+import { prisma } from "../lib/index.js";
+import { activityProcessor, type ProcessingResult } from '../services/activityProcessor.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { authenticateUser } from '../services/auth.js';
 
 const stravaRouter = Router();
 
@@ -19,7 +21,7 @@ interface StravaWebhookEvent {
 /**
  * GET /api/strava/webhook - Webhook verification
  */
-stravaRouter.get('/webhook', (req: Request, res: Response) => {
+stravaRouter.get('/webhook', (req: Request, res: Response): void => {
     console.log('🔗 Strava webhook verification request:', req.query);
 
     const mode = req.query['hub.mode'];
@@ -37,8 +39,11 @@ stravaRouter.get('/webhook', (req: Request, res: Response) => {
 
 /**
  * POST /api/strava/webhook - Handle webhook events
+ * OPTIMIZED FOR VERCEL SERVERLESS
  */
-stravaRouter.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
+stravaRouter.post('/webhook', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const startTime = Date.now();
+
     try {
         const event: StravaWebhookEvent = req.body;
 
@@ -50,10 +55,10 @@ stravaRouter.post('/webhook', async (req: Request, res: Response, next: NextFunc
             event_time: new Date(event.event_time * 1000).toISOString(),
         });
 
-        // Only process activity creation events
+        // Respond immediately for non-activity events
         if (event.object_type !== 'activity' || event.aspect_type !== 'create') {
             console.log(`⏭️ Ignoring ${event.object_type} ${event.aspect_type} event`);
-            res.status(200).json({ message: 'Event received but not processed' });
+            res.status(200).json({ message: 'Event acknowledged' });
             return;
         }
 
@@ -62,7 +67,7 @@ stravaRouter.post('/webhook', async (req: Request, res: Response, next: NextFunc
 
         console.log(`🏃 New activity created: ${activityId} for athlete ${stravaAthleteId}`);
 
-        // Find user by Strava athlete ID
+        // Quick user lookup
         const user = await prisma.user.findUnique({
             where: { stravaAthleteId },
             select: {
@@ -73,61 +78,81 @@ stravaRouter.post('/webhook', async (req: Request, res: Response, next: NextFunc
             },
         });
 
-        if (!user) {
-            console.log(`⚠️ User with Strava athlete ID ${stravaAthleteId} not found`);
-            res.status(200).json({ message: 'User not found' });
+        if (!user || !user.weatherEnabled) {
+            console.log(!user ? '⚠️ User not found' : '⚠️ Weather disabled');
+            res.status(200).json({ message: 'Event acknowledged' });
             return;
         }
 
-        if (!user.weatherEnabled) {
-            console.log(`⚠️ Weather updates disabled for user ${user.id}`);
-            res.status(200).json({ message: 'Weather updates disabled for user' });
-            return;
-        }
+        console.log(`👤 Processing for: ${user.firstName} ${user.lastName}`);
 
-        console.log(`👤 Found user: ${user.firstName} ${user.lastName} (${user.id})`);
+        // Try to process immediately (with retry logic for 404)
+        let attempts = 0;
+        let result: ProcessingResult | null = null;
 
-        // Process the activity asynchronously (don't wait for completion)
-        // This allows us to respond quickly to Strava
-        setImmediate(async () => {
+        while (attempts < 3 && Date.now() - startTime < 8000) {
             try {
-                console.log(`🔄 Background processing started for activity ${activityId}`);
-
-                // Add a small delay to ensure the activity is fully available in Strava's API
-                await new Promise(resolve => setTimeout(resolve, 5000));
-
-                const result = await activityProcessor.processActivity(activityId, user.id);
-
-                if (result.success && !result.skipped) {
-                    console.log(`✅ Webhook processing successful for activity ${activityId}`);
-                } else if (result.skipped) {
-                    console.log(`⏭️ Activity ${activityId} was skipped: ${result.reason}`);
-                } else {
-                    console.log(`❌ Webhook processing failed for activity ${activityId}: ${result.error}`);
+                if (attempts > 0) {
+                    // Wait between retries
+                    const delay = attempts * 1500; // 1.5s, 3s
+                    console.log(`⏳ Retry ${attempts}: waiting ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
                 }
 
-            } catch (error) {
-                console.error(`💥 Background processing error for activity ${activityId}:`, error);
-            }
-        });
+                console.log(`🔄 Attempt ${attempts + 1} to process activity ${activityId}`);
+                result = await activityProcessor.processActivity(activityId, user.id);
 
-        // Respond immediately to Strava
+                // If successful or skipped (not a 404), break
+                if (result.success || result.skipped) {
+                    break;
+                }
+
+                // Check if it's a "not found" error
+                if (result.error?.includes('not found') || result.error?.includes('404')) {
+                    attempts++;
+                    continue;
+                }
+
+                // Other errors, don't retry
+                break;
+
+            } catch (error) {
+                console.error(`Attempt ${attempts + 1} failed:`, error);
+                attempts++;
+            }
+        }
+
+        // Log final result
+        if (result?.success && !result?.skipped) {
+            console.log(`✅ Success: Activity ${activityId} updated with weather`);
+        } else if (result?.skipped) {
+            console.log(`⏭️ Skipped: ${result.reason}`);
+        } else {
+            console.log(`❌ Failed after ${attempts} attempts: ${result?.error || 'Unknown error'}`);
+        }
+
+        // Always respond 200 to prevent Strava retries
         res.status(200).json({
-            message: 'Webhook received, activity queued for processing',
+            message: 'Webhook processed',
             activityId,
-            userId: user.id,
+            attempts,
+            duration: Date.now() - startTime,
+            success: result?.success || false,
         });
 
     } catch (error) {
-        console.error('Webhook processing error:', error);
-        next(error);
+        console.error('❌ Webhook handler error:', error);
+        res.status(200).json({
+            message: 'Webhook acknowledged with error',
+            duration: Date.now() - startTime,
+        });
     }
 });
 
 /**
  * POST /api/strava/webhook/test - Test webhook processing with manual event
  */
-stravaRouter.post('/webhook/test', async (req: Request, res: Response, next: NextFunction) => {
+stravaRouter.post('/webhook/test', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { activityId, athleteId } = req.body;
 
@@ -196,9 +221,93 @@ stravaRouter.post('/webhook/test', async (req: Request, res: Response, next: Nex
 });
 
 /**
+ * POST /api/strava/webhook/debug/:activityId
+ * Debug endpoint to test webhook processing without actual webhook
+ */
+stravaRouter.post('/webhook/debug/:activityId', authenticateUser, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+        const { activityId } = req.params;
+        const user = req.user!;
+
+        console.log(`🧪 DEBUG: Testing webhook processing for activity ${activityId}`);
+
+        // Get full user data
+        const fullUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+                id: true,
+                stravaAthleteId: true,
+                weatherEnabled: true,
+                firstName: true,
+                lastName: true,
+            },
+        });
+
+        if (!fullUser) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+
+        console.log(`👤 User: ${fullUser.firstName} ${fullUser.lastName} (${fullUser.stravaAthleteId})`);
+
+        // Simulate the webhook processing
+        const steps: any[] = [];
+
+        try {
+            steps.push({ step: 'start', time: Date.now() - startTime });
+
+            // Process the activity
+            const result = await activityProcessor.processActivity(activityId!, fullUser.id, true);
+
+            steps.push({
+                step: 'processed',
+                time: Date.now() - startTime,
+                success: result.success,
+                skipped: result.skipped,
+                error: result.error,
+                reason: result.reason
+            });
+
+            res.json({
+                success: true,
+                message: 'Debug webhook processing complete',
+                duration: Date.now() - startTime,
+                steps,
+                result,
+                user: {
+                    id: fullUser.id,
+                    stravaAthleteId: fullUser.stravaAthleteId,
+                    name: `${fullUser.firstName} ${fullUser.lastName}`,
+                },
+            });
+
+        } catch (processError) {
+            steps.push({
+                step: 'error',
+                time: Date.now() - startTime,
+                error: processError instanceof Error ? processError.message : 'Unknown error'
+            });
+
+            res.status(500).json({
+                success: false,
+                message: 'Processing failed',
+                duration: Date.now() - startTime,
+                steps,
+                error: processError instanceof Error ? processError.message : 'Unknown error',
+            });
+        }
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
  * GET /api/strava/webhook/status - Check webhook subscription status
  */
-stravaRouter.get('/webhook/status', (req: Request, res: Response) => {
+stravaRouter.get('/webhook/status', (req: Request, res: Response): void => {
     res.json({
         success: true,
         message: 'Webhook endpoint is active',
@@ -210,4 +319,4 @@ stravaRouter.get('/webhook/status', (req: Request, res: Response) => {
     });
 });
 
-export{ stravaRouter };
+export { stravaRouter };

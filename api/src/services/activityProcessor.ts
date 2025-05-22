@@ -52,10 +52,16 @@ export class ActivityProcessor {
         userId: string,
         forceUpdate: boolean = false
     ): Promise<ProcessingResult> {
+        const startTime: number = Date.now();
+        const log = (step: string, data?: any): void => {
+            console.log(`[${Date.now() - startTime}ms] ${step}`, data || '');
+        };
+
         try {
-            console.log(`🔄 Processing activity ${activityId} for user ${userId}`);
+            log(`🔄 START processing activity ${activityId} for user ${userId}`);
 
             // Get user's Strava tokens
+            log('📊 Fetching user from database...');
             const user = await prisma.user.findUnique({
                 where: { id: userId },
                 select: {
@@ -69,11 +75,14 @@ export class ActivityProcessor {
             });
 
             if (!user) {
+                log('❌ User not found');
                 throw new Error('User not found');
             }
 
+            log(`✅ User found: ${user.firstName} ${user.lastName}`);
+
             if (!user.weatherEnabled) {
-                console.log(`⚠️ Weather updates disabled for user ${userId}`);
+                log('⚠️ Weather updates disabled');
                 return {
                     success: false,
                     activityId,
@@ -82,15 +91,18 @@ export class ActivityProcessor {
                 };
             }
 
-            // Check if token needs refresh and refresh if necessary
+            // Check if token needs refresh
+            log('🔑 Checking token validity...');
             const tokenData = await stravaApiService.ensureValidToken(
                 user.accessToken,
                 user.refreshToken,
                 user.tokenExpiresAt
             );
+            log(`✅ Token ${tokenData.wasRefreshed ? 'was refreshed' : 'is valid'}`);
 
-            // Update tokens in database if they were refreshed
+            // Update tokens if refreshed
             if (tokenData.wasRefreshed) {
+                log('💾 Saving refreshed tokens...');
                 await prisma.user.update({
                     where: { id: userId },
                     data: {
@@ -100,19 +112,22 @@ export class ActivityProcessor {
                         updatedAt: new Date(),
                     },
                 });
-                console.log(`🔄 Refreshed tokens for user ${userId}`);
+                log('✅ Tokens updated in database');
             }
 
-            // Get activity details from Strava (using refreshed token)
+            // Get activity from Strava
+            log(`🏃 Fetching activity ${activityId} from Strava...`);
             const activity = await stravaApiService.getActivity(activityId, tokenData.accessToken);
+            log(`✅ Activity retrieved: "${activity.name}" (${activity.type})`);
 
             if (!activity) {
+                log('❌ Activity not found on Strava');
                 throw new Error('Activity not found on Strava');
             }
 
-            // Check if already processed (unless forcing update)
+            // Check if already has weather
             if (!forceUpdate && this.hasWeatherData(activity.description)) {
-                console.log(`⏭️ Activity ${activityId} already has weather data, skipping`);
+                log('⏭️ Activity already has weather data');
                 return {
                     success: true,
                     activityId,
@@ -121,9 +136,9 @@ export class ActivityProcessor {
                 };
             }
 
-            // Check if activity has location data
+            // Check GPS coordinates
             if (!activity.start_latlng || activity.start_latlng.length !== 2) {
-                console.log(`📍 Activity ${activityId} has no GPS coordinates, skipping`);
+                log('📍 No GPS coordinates found');
                 return {
                     success: false,
                     activityId,
@@ -133,22 +148,28 @@ export class ActivityProcessor {
             }
 
             const [lat, lon] = activity.start_latlng;
-            const startTime = new Date(activity.start_date);
-
-            console.log(`📍 Activity location: ${lat}, ${lon} at ${startTime.toISOString()}`);
+            const activityStartTime = new Date(activity.start_date);
+            log(`📍 GPS: ${lat}, ${lon} at ${activityStartTime.toISOString()}`);
 
             // Get weather data
-            const weatherData = await weatherService.getWeatherForActivity(lat, lon, startTime, activityId);
+            log('🌤️ Fetching weather data...');
+            const weatherData = await weatherService.getWeatherForActivity(lat, lon, activityStartTime, activityId);
+            log(`✅ Weather: ${weatherData.temperature}°F, ${weatherData.description}`);
 
-            // Update activity description with weather data
+            // Create updated description
+            log('📝 Creating weather description...');
             const updatedDescription = this.createWeatherDescription(activity, weatherData);
+            log(`✅ Description created (${updatedDescription.length} chars)`);
 
-            // Update activity on Strava (using refreshed token)
+            // Update activity on Strava
+            log('📤 Updating activity on Strava...');
             await stravaApiService.updateActivity(activityId, tokenData.accessToken, {
                 description: updatedDescription,
             });
+            log('✅ Activity updated successfully!');
 
-            console.log(`✅ Successfully processed activity ${activityId} with weather data`);
+            const totalTime: number = Date.now() - startTime;
+            log(`✅ COMPLETE in ${totalTime}ms`);
 
             return {
                 success: true,
@@ -157,14 +178,20 @@ export class ActivityProcessor {
             };
 
         } catch (error) {
-            console.error(`❌ Failed to process activity ${activityId}:`, error);
-
-            const errorMessage = error instanceof Error ? error.message : 'Unknown processing error';
+            const totalTime: number = Date.now() - startTime;
+            console.error(`❌ FAILED after ${totalTime}ms:`, {
+                activityId,
+                userId,
+                error: error instanceof Error ? {
+                    message: error.message,
+                    stack: error.stack,
+                } : error,
+            });
 
             return {
                 success: false,
                 activityId,
-                error: errorMessage,
+                error: error instanceof Error ? error.message : 'Unknown error',
             };
         }
     }

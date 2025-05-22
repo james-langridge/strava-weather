@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { webhookSubscriptionService } from '../services/webhookSubscription.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { config } from '../config/environment.js';
+import {prisma} from "../lib/index.js";
 
 const adminRouter = Router();
 
@@ -209,6 +210,88 @@ adminRouter.post('/webhook/setup', requireAdminAuth, async (req: Request, res: R
                 subscription,
                 callbackUrl,
                 action: 'created',
+            },
+        });
+
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * GET /api/admin/webhook/monitor - Monitor webhook processing
+ * Shows recent webhook events and processing status
+ */
+adminRouter.get('/webhook/monitor', requireAdminAuth, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Get webhook subscription status
+        const subscription = await webhookSubscriptionService.viewSubscription();
+
+        // Get recent user activities (as a proxy for webhook activity)
+        const recentUsers = await prisma.user.findMany({
+            where: {
+                updatedAt: {
+                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+                },
+            },
+            select: {
+                id: true,
+                stravaAthleteId: true,
+                firstName: true,
+                lastName: true,
+                weatherEnabled: true,
+                updatedAt: true,
+                tokenExpiresAt: true,
+            },
+            orderBy: {
+                updatedAt: 'desc',
+            },
+            take: 10,
+        });
+
+        // Check Vercel function logs status
+        const functionStatus = {
+            endpoint: '/api/strava/webhook',
+            method: 'POST',
+            expectedResponse: 200,
+            vercelDashboard: `https://vercel.com/${process.env.VERCEL_TEAM_ID || 'your-team'}/${process.env.VERCEL_PROJECT_ID || 'your-project'}/functions`,
+        };
+
+        res.json({
+            success: true,
+            data: {
+                webhook: {
+                    hasSubscription: !!subscription,
+                    subscriptionId: subscription?.id,
+                    callbackUrl: subscription?.callback_url,
+                    createdAt: subscription?.created_at,
+                },
+                recentActivity: {
+                    usersUpdatedLast24h: recentUsers.length,
+                    users: recentUsers.map(u => ({
+                        name: `${u.firstName} ${u.lastName}`,
+                        stravaId: u.stravaAthleteId,
+                        weatherEnabled: u.weatherEnabled,
+                        lastActive: u.updatedAt,
+                        tokenValid: new Date(u.tokenExpiresAt) > new Date(),
+                    })),
+                },
+                debugging: {
+                    tips: [
+                        'Check Vercel function logs for webhook POST requests',
+                        'Look for "Strava webhook event received" in logs',
+                        'Verify APP_URL matches your deployment URL',
+                        'Test with manual webhook: POST /api/strava/webhook/test',
+                        'Use debug endpoint: POST /api/strava/webhook/debug/:activityId',
+                    ],
+                    functionStatus,
+                },
+                environment: {
+                    nodeEnv: config.NODE_ENV,
+                    hasAppUrl: !!config.VITE_API_URL,
+                    appUrl: config.VITE_API_URL,
+                    isProduction: config.isProduction,
+                },
             },
         });
 
