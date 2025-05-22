@@ -233,4 +233,4 @@ healthRouter.get('/live', (req: Request, res: Response) => {
     });
 });
 
-module.exports = { healthRouter  };
+export { healthRouter  };

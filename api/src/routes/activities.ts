@@ -160,4 +160,4 @@ activitiesRouter.post('/process/batch', authenticateUser, async (req: Request, r
     }
 });
 
-module.exports = { activitiesRouter };
+export { activitiesRouter };

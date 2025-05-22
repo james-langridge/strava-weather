@@ -210,4 +210,4 @@ stravaRouter.get('/webhook/status', (req: Request, res: Response) => {
     });
 });
 
-module.exports = { stravaRouter };
+export{ stravaRouter };

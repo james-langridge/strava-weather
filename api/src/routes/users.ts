@@ -245,4 +245,4 @@ usersRouter.delete('/me', authenticateUser, async (req: Request, res: Response, 
     }
 });
 
-module.exports = { usersRouter };
+export { usersRouter };

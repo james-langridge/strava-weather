@@ -233,4 +233,4 @@ authRouter.delete('/account', authenticateUser, async (req: Request, res: Respon
     }
 });
 
-module.exports = { authRouter };
+export { authRouter };
