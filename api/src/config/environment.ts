@@ -18,6 +18,9 @@ const environmentSchema = z.object({
     // Database
     DATABASE_URL: z.string().url(),
 
+    // Admin token for webhook management (optional)
+    ADMIN_TOKEN: z.string().optional(),
+
     // Strava API
     STRAVA_CLIENT_ID: z.string().min(1),
     STRAVA_CLIENT_SECRET: z.string().min(1),
