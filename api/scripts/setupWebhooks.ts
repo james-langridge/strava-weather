@@ -72,7 +72,7 @@ async function checkStatus() {
     }
 }
 
-async function setupWebhook(baseUrl: string | null) {
+async function setupWebhook(baseUrl: string | null | undefined) {
     console.log('📍 Setting up webhook subscription...\n');
 
     // Check for existing subscription
