@@ -33,12 +33,17 @@ app.use('/api/activities', activitiesRouter);
 // Error handling
 app.use(errorHandler);
 
-// Start server
-const port = config.PORT;
-app.listen(port, () => {
-    console.log(`✅ Server running on http://localhost:${port}`);
-    console.log(`🌍 Environment: ${config.NODE_ENV}`);
-    console.log(`🏥 Health check: http://localhost:${port}/api/health`);
-    console.log(`🔗 Webhook endpoint: http://localhost:${port}/api/strava/webhook`);
-    console.log(`🔐 OAuth flow: http://localhost:${port}/api/auth/strava`);
-});
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+    const port = config.PORT;
+    app.listen(port, () => {
+        console.log(`✅ Server running on http://localhost:${port}`);
+        console.log(`🌍 Environment: ${config.NODE_ENV}`);
+        console.log(`🏥 Health check: http://localhost:${port}/api/health`);
+        console.log(`🔗 Webhook endpoint: http://localhost:${port}/api/strava/webhook`);
+        console.log(`🔐 OAuth flow: http://localhost:${port}/api/auth/strava`);
+    });
+}
+
+// Export for Vercel
+export default app;
