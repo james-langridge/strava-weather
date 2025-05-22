@@ -15,6 +15,8 @@ const environmentSchema = z.object({
     // Frontend URL
     FRONTEND_URL: z.string().url().default('http://localhost:5173'),
 
+    VITE_API_URL: z.string().url().default('http://localhost:3001'),
+
     // Database
     DATABASE_URL: z.string().url(),
 

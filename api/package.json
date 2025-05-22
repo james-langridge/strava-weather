@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "prisma generate && tsc",
-    "dev": "tsx watch index.ts",
+    "dev": "tsx watch api/index.ts",
     "start": "node dist/index.js",
     "test": "jest",
     "test:watch": "jest --watch",

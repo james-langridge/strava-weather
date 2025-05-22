@@ -25,12 +25,12 @@ export async function setupWebhookOnStartup(): Promise<void> {
 
         if (config.isProduction) {
             // In production, use environment variable or construct from known domain
-            const productionUrl = process.env.APP_URL || process.env.VERCEL_URL;
+            const productionUrl = config.VITE_API_URL || process.env.VERCEL_URL;
 
             if (!productionUrl) {
-                console.warn('⚠️  No APP_URL or VERCEL_URL found in production.');
-                console.warn('   Set APP_URL environment variable to enable automatic webhook setup.');
-                console.warn('   Example: APP_URL=https://your-domain.com');
+                console.warn('⚠️  No VITE_API_URL or VERCEL_URL found in production.');
+                console.warn('   Set VITE_API_URL environment variable to enable automatic webhook setup.');
+                console.warn('   Example: VITE_API_URL=https://your-domain.com');
                 console.warn('   You can manually setup webhooks using the admin API.');
                 return;
             }
