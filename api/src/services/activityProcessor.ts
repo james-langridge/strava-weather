@@ -309,19 +309,22 @@ export class ActivityProcessor {
 
         // Remove any existing weather data (in case we're updating)
         const cleanDescription = originalDescription
-            .replace(/\n*[A-Z][^,]+, \d+°C, Feels like.*from [NSEW]+/g, '')
-            .replace(/\n*🌤️ Weather:[\s\S]*$/, '')
+            .replace(/\n*[A-Z][^,]+, -?\d+°C, Feels like.*from [NSEW]+[NSEW]*/g, '') // Handle all wind directions
+            .replace(/\n*🌤️ Weather:[\s\S]*$/, '') // Remove old format with emoji
+            .replace(/\n\n+/g, '\n') // Clean up multiple newlines
             .trim();
 
+        // Create weather line in the requested format
         // "Light rain, 10°C, Feels like 10°C, Humidity 91%, Wind 2m/s from WSW"
         const condition = weatherData.description.charAt(0).toUpperCase() + weatherData.description.slice(1);
 
+        // NO CONVERSION NEEDED - weatherData is already in Celsius!
         const weatherLine = [
             condition,
-            `${Math.round((weatherData.temperature - 32) * 5/9)}°C`, // Convert F to C
-            `Feels like ${Math.round((weatherData.temperatureFeel - 32) * 5/9)}°C`, // Convert F to C
+            `${weatherData.temperature}°C`,
+            `Feels like ${weatherData.temperatureFeel}°C`,
             `Humidity ${weatherData.humidity}%`,
-            `Wind ${Math.round(weatherData.windSpeed * 0.44704)}m/s from ${this.getWindDirection(weatherData.windDirection)}` // Convert mph to m/s
+            `Wind ${weatherData.windSpeed}m/s from ${this.getWindDirectionString(weatherData.windDirection)}`
         ].join(', ');
 
         // Combine original description with weather data
@@ -334,100 +337,11 @@ export class ActivityProcessor {
 
     /**
      * Convert wind direction degrees to compass direction
-     * (Add this helper method if it doesn't exist)
      */
-    private getWindDirection(degrees: number | string): string {
-        // If already a string direction, return it
-        if (typeof degrees === 'string') {
-            return degrees;
-        }
-
+    private getWindDirectionString(degrees: number): string {
         const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         const index = Math.round(degrees / 22.5) % 16;
         return directions[index] || 'N';
-    }
-
-    /**
-     * Get basic user statistics (no database logging required)
-     * Returns statistics based on Strava API data
-     */
-    async getUserActivityStats(userId: string, daysSince: number = 30): Promise<{
-        activitiesFound: number;
-        activitiesWithWeather: number;
-        activitiesWithoutWeather: number;
-        weatherCoverage: number;
-    }> {
-        try {
-            // Get user's Strava tokens
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: {
-                    accessToken: true,
-                    refreshToken: true,
-                    tokenExpiresAt: true,
-                    weatherEnabled: true,
-                },
-            });
-
-            if (!user || !user.weatherEnabled) {
-                return {
-                    activitiesFound: 0,
-                    activitiesWithWeather: 0,
-                    activitiesWithoutWeather: 0,
-                    weatherCoverage: 0,
-                };
-            }
-
-            // Get recent activities from Strava
-            const tokenData = await stravaApiService.ensureValidToken(
-                user.accessToken,
-                user.refreshToken,
-                user.tokenExpiresAt
-            );
-
-            const sinceTimestamp = Math.floor((Date.now() - (daysSince * 24 * 60 * 60 * 1000)) / 1000);
-            const activities = await stravaApiService.getActivities(tokenData.accessToken, sinceTimestamp);
-
-            if (!activities || activities.length === 0) {
-                return {
-                    activitiesFound: 0,
-                    activitiesWithWeather: 0,
-                    activitiesWithoutWeather: 0,
-                    weatherCoverage: 0,
-                };
-            }
-
-            // Count activities with weather data by checking descriptions
-            let activitiesWithWeather = 0;
-            for (const activity of activities) {
-                const fullActivity = await stravaApiService.getActivity(activity.id.toString(), tokenData.accessToken);
-                if (fullActivity && this.hasWeatherData(fullActivity.description)) {
-                    activitiesWithWeather++;
-                }
-
-                // Small delay to avoid rate limits
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
-
-            const activitiesWithoutWeather = activities.length - activitiesWithWeather;
-            const weatherCoverage = activities.length > 0 ? (activitiesWithWeather / activities.length) * 100 : 0;
-
-            return {
-                activitiesFound: activities.length,
-                activitiesWithWeather,
-                activitiesWithoutWeather,
-                weatherCoverage: Math.round(weatherCoverage * 100) / 100,
-            };
-
-        } catch (error) {
-            console.error(`Failed to get user activity stats for ${userId}:`, error);
-            return {
-                activitiesFound: 0,
-                activitiesWithWeather: 0,
-                activitiesWithoutWeather: 0,
-                weatherCoverage: 0,
-            };
-        }
     }
 }
 

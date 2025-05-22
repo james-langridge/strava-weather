@@ -114,7 +114,6 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
 
 /**
  * Check if weather already added (prevent duplicates)
- * Updated to check for °C instead of °F
  */
 function hasWeatherInDescription(description: string | null): boolean {
     if (!description) return false;
@@ -239,10 +238,10 @@ function formatWeatherDescription(weather: WeatherData): string {
 
     const parts = [
         condition,
-        `${weather.temperature}°C`,
-        `Feels like ${weather.temperatureFeel}°C`,
+        `${weather.temperature}°C`,                    // Already in Celsius from API
+        `Feels like ${weather.temperatureFeel}°C`,     // Already in Celsius from API
         `Humidity ${weather.humidity}%`,
-        `Wind ${weather.windSpeed}m/s from ${weather.windDirection}`,
+        `Wind ${weather.windSpeed}m/s from ${weather.windDirection}`, // Already in m/s from API
     ];
 
     return parts.join(', ');
