@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../../prisma';
+import { prisma } from '../lib';
 import { authenticateUser } from '@/services/auth';
 import { AppError } from '../utils/errors';
 import type { Request, Response, NextFunction } from 'express';
@@ -9,7 +9,7 @@ const router = Router();
 
 // Validation schemas
 const userUpdateSchema = z.object({
-    weatherEnabled: z.boolean().optional(),
+    weatherEnabled: z.boolean(),
 });
 
 const preferencesUpdateSchema = z.object({
@@ -18,6 +18,14 @@ const preferencesUpdateSchema = z.object({
     includeUvIndex: z.boolean().optional(),
     includeVisibility: z.boolean().optional(),
     customFormat: z.string().optional(),
+}).transform((data) => {
+    const result: any = {};
+    Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined) {
+            result[key] = value;
+        }
+    });
+    return result;
 });
 
 /**
@@ -130,7 +138,7 @@ router.patch('/me', authenticateUser, async (req: Request, res: Response, next: 
  */
 router.patch('/me/preferences', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = (req as any).user;
+        const user = req.user!;
 
         // Validate request body
         const validation = preferencesUpdateSchema.safeParse(req.body);

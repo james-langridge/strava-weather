@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import {config} from '../config/environment';
-import {prisma} from "../../prisma";
+import {prisma} from "../lib";
 
 export interface StravaAthlete {
     id: number;
@@ -125,7 +125,18 @@ function decryptToken(encryptedData: string): string {
         const algorithm = 'aes-256-cbc';
         const key = crypto.scryptSync(config.ENCRYPTION_KEY, 'salt', 32);
 
-        const [ivHex, encrypted] = encryptedData.split(':');
+        const parts = encryptedData.split(':');
+
+        if (parts.length !== 2) {
+            throw new Error('Invalid encrypted data format');
+        }
+
+        const [ivHex, encrypted] = parts;
+
+        if (!ivHex || !encrypted) {
+            throw new Error('Missing IV or encrypted data');
+        }
+
         const iv = Buffer.from(ivHex, 'hex');
 
         const decipher = crypto.createDecipheriv(algorithm, key, iv);

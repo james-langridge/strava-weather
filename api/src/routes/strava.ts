@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { config } from '../config/environment';
-import { prisma} from "../../prisma";
+import { prisma} from "../lib";
 import { activityProcessor } from '../services/activityProcessor';
 import { AppError } from '../middleware/errorHandler';
 

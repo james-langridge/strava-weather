@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { activityProcessor } from '../services/activityProcessor';
-import { authenticateUser, type AuthenticatedRequest } from '../services/auth';
+import { authenticateUser } from '../services/auth';
 import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
@@ -8,8 +8,7 @@ const router = Router();
 /**
  * POST /api/activities/process/:activityId - Process a specific activity
  */
-router.post('/process/:activityId', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
+router.post('/process/:activityId', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {    try {
         const user = req.user;
         const { activityId } = req.params;
         const { forceUpdate } = req.body;
@@ -17,6 +16,10 @@ router.post('/process/:activityId', authenticateUser, async (req: AuthenticatedR
         if (!activityId || !/^\d+$/.test(activityId)) {
             throw new AppError('Invalid activity ID', 400);
         }
+
+    if (!user) {
+        throw new AppError('User not found');
+    }
 
         console.log(`🔄 Manual processing request for activity ${activityId} by user ${user.id}`);
 
@@ -54,9 +57,14 @@ router.post('/process/:activityId', authenticateUser, async (req: AuthenticatedR
 /**
  * POST /api/activities/process/recent - Process recent activities
  */
-router.post('/process/recent', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/process/recent', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = req.user;
+
+        if (!user) {
+            throw new AppError('User not found');
+        }
+
         const { days = 30 } = req.body;
 
         if (typeof days !== 'number' || days < 1 || days > 365) {
@@ -95,9 +103,14 @@ router.post('/process/recent', authenticateUser, async (req: AuthenticatedReques
 /**
  * POST /api/activities/process/batch - Process multiple specific activities
  */
-router.post('/process/batch', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/process/batch', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = req.user;
+
+        if (!user) {
+            throw new AppError('User not found');
+        }
+
         const { activityIds, forceUpdate = false } = req.body;
 
         if (!Array.isArray(activityIds) || activityIds.length === 0) {
@@ -140,25 +153,6 @@ router.post('/process/batch', authenticateUser, async (req: AuthenticatedRequest
                 statistics: stats,
                 results,
             },
-        });
-
-    } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * GET /api/activities/stats - Get processing statistics
- */
-router.get('/stats', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-        const user = req.user;
-
-        const stats = await activityProcessor.getProcessingStats(user.id);
-
-        res.json({
-            success: true,
-            data: stats,
         });
 
     } catch (error) {

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { config } from '../config/environment';
-import { prisma} from "../../prisma";
-import type { Request, Response, NextFunction } from 'express';
+import {config} from '../config/environment';
+import {prisma} from "../lib";
+import type {NextFunction, Request, Response} from 'express';
 
 export interface JwtPayload {
     userId: string;
@@ -10,13 +10,25 @@ export interface JwtPayload {
     exp: number;
 }
 
+export interface AuthenticatedUser {
+    id: string;
+    stravaAthleteId: string;
+    firstName: string;
+    lastName: string;
+    weatherEnabled: boolean;
+    accessToken: string;
+}
+
 export interface AuthenticatedRequest extends Request {
-    user: {
-        id: string;
-        stravaAthleteId: string;
-        accessToken: string;
-        weatherEnabled: boolean;
-    };
+    user: AuthenticatedUser;
+}
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: AuthenticatedUser;
+        }
+    }
 }
 
 /**
@@ -129,6 +141,8 @@ export async function authenticateUser(
             stravaAthleteId: user.stravaAthleteId,
             accessToken: user.accessToken,
             weatherEnabled: user.weatherEnabled,
+            firstName: user.firstName ?? '',
+            lastName: user.lastName ?? '',
         };
 
         next();
@@ -145,47 +159,6 @@ export async function authenticateUser(
             error: 'Authentication failed',
             message,
         });
-    }
-}
-
-/**
- * Optional authentication middleware (doesn't fail if no token)
- */
-export async function optionalAuth(
-    req: Request,
-    res: Response,
-    next: NextFunction
-): Promise<void> {
-    try {
-        const token = extractTokenFromRequest(req);
-
-        if (token) {
-            const decoded = verifyJWT(token);
-            const user = await prisma.user.findUnique({
-                where: { id: decoded.userId },
-                select: {
-                    id: true,
-                    stravaAthleteId: true,
-                    accessToken: true,
-                    weatherEnabled: true,
-                },
-            });
-
-            if (user) {
-                (req as AuthenticatedRequest).user = {
-                    id: user.id,
-                    stravaAthleteId: user.stravaAthleteId,
-                    accessToken: user.accessToken,
-                    weatherEnabled: user.weatherEnabled,
-                };
-            }
-        }
-
-        next();
-
-    } catch (error) {
-        // Don't fail on optional auth errors, just continue without user
-        next();
     }
 }
 

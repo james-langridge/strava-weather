@@ -3,7 +3,7 @@ import { config } from '../config/environment';
 import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser } from '../services/auth';
 import { stravaApiService } from '../services/stravaApi';
 import { AppError } from '../middleware/errorHandler';
-import { prisma} from "../../prisma";
+import { prisma} from "../lib";
 
 const router = Router();
 

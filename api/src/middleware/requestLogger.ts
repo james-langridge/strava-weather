@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { config } from '../config/environment';
+import { config } from '@/config/environment';
 
 /**
  * Enhanced request logging middleware
@@ -25,10 +25,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
         });
     }
 
-    // Capture original res.end to log response
-    const originalEnd = res.end;
-
-    res.end = function(chunk?: any, encoding?: any, callback?: any) {
+    // Listen for response finish event (cleaner than overriding res.end)
+    res.on('finish', () => {
         const responseTime = Date.now() - startTime;
 
         // Log response details
@@ -58,10 +56,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
                     break;
             }
         }
-
-        // Call original end method
-        originalEnd.call(this, chunk, encoding, callback);
-    };
+    });
 
     next();
 }
@@ -142,37 +137,4 @@ function getLogLevel(statusCode: number): 'info' | 'warn' | 'error' {
     }
 
     return 'info';
-}
-
-/**
- * Performance monitoring middleware
- * Logs slow requests for optimization
- */
-export function performanceLogger(req: Request, res: Response, next: NextFunction): void {
-    const startTime = process.hrtime.bigint();
-
-    const originalEnd = res.end;
-
-    res.end = function(chunk?: any, encoding?: any, callback?: any) {
-        const endTime = process.hrtime.bigint();
-        const responseTimeMs = Number(endTime - startTime) / 1_000_000; // Convert to milliseconds
-
-        // Log slow requests (>1000ms for API endpoints, >2000ms for webhooks)
-        const slowThreshold = req.url.includes('/webhook') ? 2000 : 1000;
-
-        if (responseTimeMs > slowThreshold) {
-            console.warn(`🐌 Slow request detected:`, {
-                method: req.method,
-                url: req.url,
-                responseTime: `${responseTimeMs.toFixed(2)}ms`,
-                statusCode: res.statusCode,
-                timestamp: new Date().toISOString(),
-            });
-        }
-
-        // Call original end method
-        originalEnd.call(this, chunk, encoding, callback);
-    };
-
-    next();
 }

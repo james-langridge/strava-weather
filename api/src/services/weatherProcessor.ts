@@ -1,5 +1,6 @@
 import { config } from '../config/environment';
-import { prisma} from "../../prisma";
+import { prisma} from "../lib";
+import axios from "axios";
 
 interface ActivityProcessingData {
     stravaActivityId: string;
@@ -63,10 +64,10 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
         }
 
         // Step 3: Check if it's an outdoor activity with location
-        if (!isOutdoorActivity(activity.type)) {
-            console.log(`⚠️ Activity ${activity.id} is not an outdoor activity (${activity.type})`);
-            return;
-        }
+        // if (!isOutdoorActivity(activity.type)) {
+        //     console.log(`⚠️ Activity ${activity.id} is not an outdoor activity (${activity.type})`);
+        //     return;
+        // }
 
         if (!activity.start_latlng || activity.start_latlng.length !== 2) {
             console.log(`⚠️ Activity ${activity.id} has no GPS coordinates`);
@@ -97,9 +98,6 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
         const updatedDescription = addWeatherToDescription(activity.description, weatherDescription);
 
         await updateStravaActivityDescription(activity.id, updatedDescription, user.accessToken);
-
-        // Step 8: Log successful processing
-        await logActivityProcessing(user.id, data.stravaActivityId, weatherData, true);
 
         const processingTime = Date.now() - startTime;
         console.log(`✅ Weather added to activity ${activity.id} in ${processingTime}ms`);
@@ -145,9 +143,9 @@ async function fetchStravaActivity(activityId: string, accessToken: string): Pro
 /**
  * Check if activity type should get weather data
  */
-function isOutdoorActivity(activityType: string): boolean {
-    return config.OUTDOOR_ACTIVITY_TYPES.includes(activityType);
-}
+// function isOutdoorActivity(activityType: string): boolean {
+//     return config.OUTDOOR_ACTIVITY_TYPES.includes(activityType);
+// }
 
 /**
  * Fetch weather data from OpenWeatherMap
@@ -168,15 +166,11 @@ async function fetchWeatherData(lat: number, lon: number, date: Date): Promise<W
             url = `${config.OPENWEATHERMAP_API_BASE_URL}/weather?lat=${lat}&lon=${lon}&appid=${config.OPENWEATHERMAP_API_KEY}&units=imperial`;
         }
 
-        const response = await fetch(url, {
-            timeout: 5000, // 5 second timeout
+        const response = await axios.get(url, {
+            timeout: 5000,
         });
 
-        if (!response.ok) {
-            throw new Error(`Weather API error: ${response.status}`);
-        }
-
-        const data = await response.json();
+        const {data} = response;
 
         // Parse response based on endpoint
         if (isHistorical) {

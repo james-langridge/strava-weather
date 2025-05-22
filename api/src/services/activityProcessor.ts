@@ -1,6 +1,6 @@
-import { weatherService, type WeatherData } from './weatherService';
+import {weatherService, type WeatherData, WeatherService} from './weatherService';
 import { stravaApiService } from './stravaApi';
-import { prisma } from '../../prisma';
+import { prisma } from '../lib';
 
 export interface ProcessingResult {
     success: boolean;
@@ -12,7 +12,7 @@ export interface ProcessingResult {
 }
 
 export interface ActivityData {
-    id: string;
+    id: string | number;
     name: string;
     start_date: string;
     start_latlng: [number, number] | null;
@@ -282,7 +282,7 @@ export class ActivityProcessor {
         const cleanDescription = originalDescription.replace(/\n*🌤️ Weather:[\s\S]*$/, '').trim();
 
         // Create weather section
-        const weatherEmoji = weatherService.constructor.getWeatherEmoji(weatherData.condition, weatherData.icon);
+        const weatherEmoji = WeatherService.getWeatherEmoji(weatherData.condition, weatherData.icon);
 
         const weatherSection = [
             '',

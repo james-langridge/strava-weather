@@ -227,7 +227,11 @@ export class WeatherService {
      * Transform OpenWeather current weather response to our format
      */
     private transformCurrentWeatherData(data: WeatherApiResponse): WeatherData {
-        const weather = data.weather[0];
+        const weather = data.weather?.[0];
+
+        if (!weather) {
+            throw new Error('No weather data found in API response');
+        }
 
         return {
             temperature: Math.round(data.main.temp),
@@ -236,7 +240,7 @@ export class WeatherService {
             pressure: data.main.pressure,
             windSpeed: Math.round(data.wind.speed * 10) / 10, // Round to 1 decimal
             windDirection: data.wind.deg,
-            windGust: data.wind.gust ? Math.round(data.wind.gust * 10) / 10 : undefined,
+            windGust: data.wind.gust ? Math.round(data.wind.gust * 10) / 10 : 0, // Default to 0 instead of undefined
             visibility: Math.round((data.visibility / 1609.34) * 10) / 10, // Convert m to miles, 1 decimal
             cloudCover: data.clouds.all,
             description: weather.description,
@@ -255,8 +259,17 @@ export class WeatherService {
      * Transform OpenWeather historical weather response to our format
      */
     private transformHistoricalWeatherData(data: HistoricalWeatherResponse, lat: number, lon: number): WeatherData {
-        const weatherPoint = data.data[0]; // Get the first (and usually only) data point
-        const weather = weatherPoint.weather[0];
+        const weatherPoint = data.data?.[0]; // Safe array access
+
+        if (!weatherPoint) {
+            throw new Error('No historical weather data found in API response');
+        }
+
+        const weather = weatherPoint.weather?.[0];
+
+        if (!weather) {
+            throw new Error('No weather details found in historical data');
+        }
 
         return {
             temperature: Math.round(weatherPoint.temp),
@@ -265,10 +278,10 @@ export class WeatherService {
             pressure: weatherPoint.pressure,
             windSpeed: Math.round(weatherPoint.wind_speed * 10) / 10,
             windDirection: weatherPoint.wind_deg,
-            windGust: weatherPoint.wind_gust ? Math.round(weatherPoint.wind_gust * 10) / 10 : undefined,
+            windGust: weatherPoint.wind_gust ? Math.round(weatherPoint.wind_gust * 10) / 10 : 0, // Default to 0
             visibility: Math.round((weatherPoint.visibility / 1609.34) * 10) / 10, // Convert m to miles
             cloudCover: weatherPoint.clouds,
-            uvIndex: weatherPoint.uvi,
+            uvIndex: weatherPoint.uvi ?? 0, // Default to 0 if undefined
             description: weather.description,
             icon: weather.icon,
             condition: weather.main,

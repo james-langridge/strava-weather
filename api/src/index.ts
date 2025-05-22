@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { config, isDevelopment } from './config/environment';
+import { config } from './config/environment';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 
@@ -34,7 +34,7 @@ app.use('/api/activities', activitiesRouter); // ← ADD THIS
 app.use(errorHandler);
 
 // Start server
-const port = parseInt(config.PORT);
+const port = config.PORT;
 app.listen(port, () => {
     console.log(`✅ Server running on http://localhost:${port}`);
     console.log(`🌍 Environment: ${config.NODE_ENV}`);

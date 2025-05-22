@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { config } from '../config/environment';
-import { prisma} from "../../prisma";
+import { prisma} from "../lib";
 import type { Request, Response, NextFunction } from 'express';
 
 const router = Router();
@@ -134,31 +134,6 @@ async function checkDatabase(): Promise<ServiceStatus> {
 }
 
 /**
- * Check Redis connectivity
- */
-async function checkRedis(): Promise<ServiceStatus> {
-    const startTime = Date.now();
-
-    try {
-        await redisClient.ping();
-
-        return {
-            status: 'healthy',
-            responseTime: Date.now() - startTime,
-            lastChecked: new Date().toISOString(),
-        };
-
-    } catch (error) {
-        return {
-            status: 'unhealthy',
-            responseTime: Date.now() - startTime,
-            error: error instanceof Error ? error.message : 'Redis connection failed',
-            lastChecked: new Date().toISOString(),
-        };
-    }
-}
-
-/**
  * Check Strava API accessibility
  */
 async function checkStravaAPI(): Promise<ServiceStatus> {
@@ -180,7 +155,7 @@ async function checkStravaAPI(): Promise<ServiceStatus> {
             status: isAccessible ? 'healthy' : 'unhealthy',
             responseTime: Date.now() - startTime,
             lastChecked: new Date().toISOString(),
-            error: !isAccessible ? `Unexpected status: ${response.status}` : undefined,
+            error: !isAccessible ? `Unexpected status: ${response.status}` : '',
         };
 
     } catch (error) {
@@ -210,7 +185,7 @@ async function checkWeatherAPI(): Promise<ServiceStatus> {
             status: isAccessible ? 'healthy' : 'unhealthy',
             responseTime: Date.now() - startTime,
             lastChecked: new Date().toISOString(),
-            error: !isAccessible ? `Unexpected status: ${response.status}` : undefined,
+            error: !isAccessible ? `Unexpected status: ${response.status}` : '',
         };
 
     } catch (error) {
