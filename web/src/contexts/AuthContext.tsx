@@ -5,7 +5,7 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     error: string | null;
-    login: () => Promise<void>;
+    login: (token?: string) => Promise<void>;
     logout: () => Promise<void>;
     revokeAccess: () => Promise<void>;
     updateUser: (updates: Partial<User>) => void;
@@ -44,13 +44,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setLoading(true);
             setError(null);
 
+            // Only check if we have a token
+            if (!api.isAuthenticated()) {
+                setUser(null);
+                return;
+            }
+
             const currentUser = await api.getCurrentUser();
             setUser(currentUser);
 
         } catch (error) {
             console.log('Not authenticated:', error);
             setUser(null);
-            // Don't set error for unauthenticated users
+            // Clear invalid token
+            api.clearToken();
 
         } finally {
             setLoading(false);
@@ -58,18 +65,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
     };
 
-    const login = () => {
+    const login = async (token?: string) => {
         try {
             setError(null);
 
-            // Direct browser redirect to the backend OAuth endpoint
-            // This avoids CORS issues by not using fetch/AJAX
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            window.location.href = `${apiBase}/api/auth/strava`;
+            if (token) {
+                // Token provided (from OAuth callback)
+                console.log('🔐 Logging in with provided token...');
+                api.setToken(token);
 
-            // Note: No need to catch errors here as the browser is redirecting
-            return Promise.resolve();
+                // Fetch user data
+                const currentUser = await api.getCurrentUser();
+                setUser(currentUser);
+                console.log(`✅ Login successful: ${currentUser.displayName}`);
+            } else {
+                // No token provided, redirect to OAuth
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                window.location.href = `${apiBase}/api/auth/strava`;
+            }
+
         } catch (error) {
+            console.error('❌ Login failed:', error);
+            api.clearToken();
+            setUser(null);
             const errorMessage = error instanceof Error ? error.message : 'Login failed';
             setError(errorMessage);
             throw error;
@@ -117,7 +135,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     const refreshUser = async () => {
-        if (!user) return;
+        if (!api.isAuthenticated()) return;
 
         try {
             setError(null);
@@ -127,6 +145,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.log('Failed to refresh user:', error);
             // If refresh fails, the user might be logged out
             setUser(null);
+            api.clearToken();
         }
     };
 

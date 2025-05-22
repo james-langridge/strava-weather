@@ -2,28 +2,50 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 
 export function AuthSuccess() {
-    const { refreshUser } = useAuth();
-    const hasRedirected = useRef(false);
+    const { login } = useAuth();
+    const hasProcessed = useRef(false);
 
     useEffect(() => {
-        if (hasRedirected.current) return;
+        if (hasProcessed.current) return;
 
-        // Mark as redirected to prevent multiple calls
-        hasRedirected.current = true;
+        // Mark as processed to prevent multiple calls
+        hasProcessed.current = true;
 
-        // Refresh user data after successful OAuth
-        refreshUser().then(() => {
-            // Redirect to dashboard after a short delay
-            setTimeout(() => {
-                window.location.href = '/dashboard';
-            }, 2000);
-        }).catch((error) => {
-            console.error('Failed to refresh user after OAuth:', error);
-            // Still redirect even if refresh fails
-            setTimeout(() => {
-                window.location.href = '/dashboard';
-            }, 2000);
-        });
+        const processToken = async () => {
+            try {
+                // Extract token from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token');
+
+                if (!token) {
+                    console.error('No token found in URL parameters');
+                    setTimeout(() => {
+                        window.location.href = '/auth/error?error=no_token';
+                    }, 2000);
+                    return;
+                }
+
+                console.log('🔑 Processing authentication token...');
+
+                // Login with the token (this will store it and fetch user data)
+                await login(token);
+
+                console.log('✅ Authentication successful, redirecting to dashboard...');
+
+                // Redirect to dashboard after a short delay
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+
+            } catch (error) {
+                console.error('Failed to process authentication:', error);
+                setTimeout(() => {
+                    window.location.href = '/auth/error?error=auth_failed';
+                }, 2000);
+            }
+        };
+
+        processToken();
     }, []); // Empty dependency array
 
     // Check if this is a new user
@@ -55,7 +77,7 @@ export function AuthSuccess() {
                 {/* Loading indicator */}
                 <div className="flex items-center justify-center space-x-2 text-gray-500">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
-                    <span className="text-sm">Redirecting to dashboard...</span>
+                    <span className="text-sm">Completing authentication...</span>
                 </div>
 
                 {/* Manual redirect button */}

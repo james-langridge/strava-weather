@@ -126,12 +126,9 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
             const token = generateJWT(user.id, user.stravaAthleteId);
 
             // Set authentication cookie using your existing function
-            setAuthCookie(res, token);
-
-            console.log(`✅ OAuth complete for user ${user.id} (existing)`);
-
-            // Redirect to success page
-            res.redirect(`${config.FRONTEND_URL}/auth/success`);
+            const redirectUrl = new URL('/auth/success', config.FRONTEND_URL);
+            redirectUrl.searchParams.set('token', token);
+            res.redirect(redirectUrl.toString());
 
         } catch (dbError) {
             console.error('❌ Database error during OAuth:', dbError);
