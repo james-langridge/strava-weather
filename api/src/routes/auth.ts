@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { config } from '../config/environment';
-import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser } from '../services/auth';
-import { stravaApiService } from '../services/stravaApi';
-import { AppError } from '../middleware/errorHandler';
-import { prisma} from "../lib";
+import { config } from '../config/environment.js';
+import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser } from '../services/auth.js';
+import { stravaApiService } from '../services/stravaApi.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { prisma} from "../lib/index.js";
 
 const authRouter = Router();
 

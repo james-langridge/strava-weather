@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import {config} from '../config/environment';
-import {prisma} from "../lib";
+import {config} from '../config/environment.js';
+import {prisma} from "../lib/index.js";
 
 export interface StravaAthlete {
     id: number;

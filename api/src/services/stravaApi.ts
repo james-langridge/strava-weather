@@ -1,4 +1,4 @@
-import { config } from '../config/environment';
+import { config } from '../config/environment.js';
 
 export interface StravaActivity {
     id: number;

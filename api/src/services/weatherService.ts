@@ -1,4 +1,4 @@
-import { config } from '../config/environment';
+import { config } from '../config/environment.js';
 
 // Weather data interfaces
 export interface WeatherData {

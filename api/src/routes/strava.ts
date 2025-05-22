@@ -1,8 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { config } from '../config/environment';
-import { prisma} from "../lib";
-import { activityProcessor } from '../services/activityProcessor';
-import { AppError } from '../middleware/errorHandler';
+import { config } from '../config/environment.js';
+import { prisma} from "../lib/index.js";
+import { activityProcessor } from '../services/activityProcessor.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 const stravaRouter = Router();
 

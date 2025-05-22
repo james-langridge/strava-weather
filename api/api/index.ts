@@ -1,16 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { config } from '../src/config/environment';
-import { errorHandler} from "../src/middleware/errorHandler";
-import { requestLogger} from "../src/middleware/requestLogger";
+import { config } from '../src/config/environment.js';
+import { errorHandler} from "../src/middleware/errorHandler.js";
+import { requestLogger} from "../src/middleware/requestLogger.js";
 
 // Route imports
-import { healthRouter} from "../src/routes/health";
-import { stravaRouter } from '../src/routes/strava';
-import { authRouter } from '../src/routes/auth';
-import { usersRouter } from '../src/routes/users';
-import { activitiesRouter } from '../src/routes/activities';
+import { healthRouter} from "../src/routes/health.js";
+import { stravaRouter } from '../src/routes/strava.js';
+import { authRouter } from '../src/routes/auth.js';
+import { usersRouter } from '../src/routes/users.js';
+import { activitiesRouter } from '../src/routes/activities.js';
 
 const app = express();
 

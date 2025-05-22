@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { config } from '@/config/environment';
+import { config } from '../config/environment.js';
 
 /**
  * Enhanced request logging middleware

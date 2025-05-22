@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import {config} from '../config/environment';
-import {prisma} from "../lib";
+import {config} from '../config/environment.js';
+import {prisma} from "../lib/index.js";
 import type {NextFunction, Request, Response} from 'express';
 
 export interface JwtPayload {
