@@ -1,5 +1,3 @@
-import React from 'react';
-
 export function AuthError() {
     // Get error message from URL
     const urlParams = new URLSearchParams(window.location.search);
