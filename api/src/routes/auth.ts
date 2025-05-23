@@ -1,7 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { config } from '../config/environment.js';
-import { generateJWT, clearAuthCookie, authenticateUser } from '../services/auth.js';
-import { stravaApiService } from '../services/stravaApi.js';
+import { generateJWT } from '../services/auth.js';
 import { prisma} from "../lib/index.js";
 import {ensureWebhooksInitialized} from "../utils/initWebhooks.js";
 
@@ -23,7 +22,7 @@ authRouter.get('/strava', (req: Request, res: Response) => {
     // Store state in session for verification (in production, use a more secure method)
     // For now, we'll just generate it and verify on callback
 
-    const authUrl = new URL('https://www.strava.com/oauth/authorize');
+    const authUrl = new URL(config.STRAVA_OAUTH_URL);
     authUrl.searchParams.set('client_id', config.STRAVA_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', `${req.protocol}://${req.get('host')}/api/auth/strava/callback`);
     authUrl.searchParams.set('response_type', 'code');
@@ -58,7 +57,7 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
         // Exchange code for access token
         console.log('🔑 Exchanging authorization code for access token');
 
-        const tokenResponse = await fetch('https://www.strava.com/oauth/token', {
+        const tokenResponse = await fetch(config.STRAVA_TOKEN_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -80,7 +79,6 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
         const tokenData = await tokenResponse.json();
         console.log('✅ Token exchange successful');
 
-        // Get athlete information
         const athlete = tokenData.athlete;
 
         if (!athlete) {
@@ -89,7 +87,6 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
         }
 
         try {
-            // Create or update user in database
             const user = await prisma.user.upsert({
                 where: { stravaAthleteId: athlete.id.toString() },
                 update: {
@@ -102,7 +99,7 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
                     city: athlete.city,
                     state: athlete.state,
                     country: athlete.country,
-                    weatherEnabled: true, // Enable by default
+                    weatherEnabled: true,
                     updatedAt: new Date(),
                 },
                 create: {
@@ -124,10 +121,8 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
             await ensureWebhooksInitialized();
 
-            // Generate JWT token using your existing function
             const token = generateJWT(user.id, user.stravaAthleteId);
 
-            // Set authentication cookie using your existing function
             const redirectUrl = new URL('/auth/success', config.FRONTEND_URL);
             redirectUrl.searchParams.set('token', token);
             res.redirect(redirectUrl.toString());
@@ -139,95 +134,6 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
     } catch (error) {
         console.error('❌ OAuth callback error:', error);
-        next(error);
-    }
-});
-
-/**
- * GET /api/auth/me - Get current user
- */
-authRouter.get('/me', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = (req as any).user; // Using your existing auth middleware
-
-        res.json({
-            success: true,
-            data: {
-                id: user.id,
-                stravaAthleteId: user.stravaAthleteId,
-                weatherEnabled: user.weatherEnabled,
-            },
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * POST /api/auth/logout - Logout user
- */
-authRouter.post('/logout', async (req: Request, res: Response) => {
-    try {
-        // Clear the authentication cookie using your existing function
-        clearAuthCookie(res);
-
-        console.log('🚪 User logged out successfully');
-
-        res.json({
-            success: true,
-            message: 'Logged out successfully',
-        });
-    } catch (error) {
-        console.error('Logout error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Logout failed',
-        });
-    }
-});
-
-/**
- * DELETE /api/auth/account - Delete user account
- */
-authRouter.delete('/account', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = (req as any).user;
-
-        console.log(`🗑️ Account deletion requested for user ${user.id}`);
-
-        // Get user's access token for Strava revocation
-        const fullUser = await prisma.user.findUnique({
-            where: { id: user.id },
-            select: { accessToken: true },
-        });
-
-        if (fullUser?.accessToken) {
-            // Revoke Strava access token
-            try {
-                await stravaApiService.revokeToken(fullUser.accessToken);
-                console.log('✅ Strava token revoked');
-            } catch (error) {
-                console.warn('⚠️ Failed to revoke Strava token:', error);
-                // Continue with account deletion even if revocation fails
-            }
-        }
-
-        // Then delete the user
-        await prisma.user.delete({
-            where: { id: user.id },
-        });
-
-        // Clear authentication cookie
-        clearAuthCookie(res);
-
-        console.log(`✅ User account ${user.id} deleted successfully`);
-
-        res.json({
-            success: true,
-            message: 'Account deleted successfully',
-        });
-
-    } catch (error) {
         next(error);
     }
 });

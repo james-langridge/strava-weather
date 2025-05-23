@@ -7,7 +7,6 @@ import type { Request, Response, NextFunction } from 'express';
 
 const usersRouter = Router();
 
-// Validation schemas
 const userUpdateSchema = z.object({
     weatherEnabled: z.boolean(),
 });
@@ -140,7 +139,6 @@ usersRouter.patch('/me/preferences', authenticateUser, async (req: Request, res:
     try {
         const user = req.user!;
 
-        // Validate request body
         const validation = preferencesUpdateSchema.safeParse(req.body);
         if (!validation.success) {
             throw new AppError('Invalid preferences data', 400);
@@ -148,7 +146,6 @@ usersRouter.patch('/me/preferences', authenticateUser, async (req: Request, res:
 
         const preferencesData = validation.data;
 
-        // Update or create preferences
         const updatedPreferences = await prisma.userPreference.upsert({
             where: { userId: user.id },
             update: preferencesData,
@@ -172,48 +169,6 @@ usersRouter.patch('/me/preferences', authenticateUser, async (req: Request, res:
             success: true,
             data: updatedPreferences,
             message: 'Weather preferences updated successfully',
-        });
-
-    } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * GET /api/users/me/stats - Get basic user statistics
- */
-usersRouter.get('/me/stats', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = (req as any).user;
-
-        const userProfile = await prisma.user.findUnique({
-            where: { id: user.id },
-            select: {
-                weatherEnabled: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
-
-        if (!userProfile) {
-            throw new AppError('User profile not found', 404);
-        }
-
-        const membershipDays = Math.floor(
-            (Date.now() - userProfile.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        res.json({
-            success: true,
-            data: {
-                weatherEnabled: userProfile.weatherEnabled,
-                membershipDays,
-                memberSince: userProfile.createdAt,
-                lastActive: userProfile.updatedAt,
-                // For activity stats, would need to query Strava API directly
-                // or implement a simpler tracking mechanism
-                message: 'Activity statistics require querying Strava API directly'
-            },
         });
 
     } catch (error) {

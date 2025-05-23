@@ -1,4 +1,4 @@
-import { config } from '../config/environment.js';
+import {config} from '../config/environment.js';
 
 export interface StravaActivity {
     id: number;
@@ -26,22 +26,6 @@ export interface StravaActivity {
     visibility: string;
 }
 
-export interface StravaAthlete {
-    id: number;
-    username?: string;
-    firstname: string;
-    lastname: string;
-    city?: string;
-    state?: string;
-    country?: string;
-    sex?: string;
-    premium?: boolean;
-    profile: string;
-    profile_medium: string;
-    created_at: string;
-    updated_at: string;
-}
-
 export interface StravaUpdateData {
     name?: string;
     type?: string;
@@ -56,40 +40,6 @@ export interface StravaUpdateData {
  */
 export class StravaApiService {
     private readonly baseUrl = 'https://www.strava.com/api/v3';
-
-    /**
-     * Get current athlete information
-     */
-    async getAthlete(accessToken: string): Promise<StravaAthlete> {
-        try {
-            console.log('🏃 Fetching athlete information from Strava');
-
-            const response = await fetch(`${this.baseUrl}/athlete`, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Strava access token expired or invalid');
-                }
-                const errorText = await response.text();
-                throw new Error(`Strava API error (${response.status}): ${errorText}`);
-            }
-
-            const athlete: StravaAthlete = await response.json();
-
-            console.log(`✅ Athlete data retrieved: ${athlete.firstname} ${athlete.lastname}`);
-
-            return athlete;
-
-        } catch (error) {
-            console.error('Failed to fetch athlete from Strava:', error);
-            throw error;
-        }
-    }
 
     /**
      * Get specific activity by ID
@@ -124,54 +74,6 @@ export class StravaApiService {
 
         } catch (error) {
             console.error(`Failed to fetch activity ${activityId}:`, error);
-            throw error;
-        }
-    }
-
-    /**
-     * Get athlete's activities with optional filtering
-     */
-    async getActivities(
-        accessToken: string,
-        after?: number,
-        before?: number,
-        page: number = 1,
-        perPage: number = 30
-    ): Promise<StravaActivity[]> {
-        try {
-            console.log(`🏃 Fetching activities from Strava (page ${page}, ${perPage} per page)`);
-
-            const params = new URLSearchParams({
-                page: page.toString(),
-                per_page: perPage.toString(),
-            });
-
-            if (after) params.append('after', after.toString());
-            if (before) params.append('before', before.toString());
-
-            const response = await fetch(`${this.baseUrl}/athlete/activities?${params}`, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Strava access token expired or invalid');
-                }
-                const errorText = await response.text();
-                throw new Error(`Strava API error (${response.status}): ${errorText}`);
-            }
-
-            const activities: StravaActivity[] = await response.json();
-
-            console.log(`✅ Retrieved ${activities.length} activities from Strava`);
-
-            return activities;
-
-        } catch (error) {
-            console.error('Failed to fetch activities from Strava:', error);
             throw error;
         }
     }
@@ -233,7 +135,7 @@ export class StravaApiService {
         try {
             console.log('🔄 Refreshing Strava access token');
 
-            const response = await fetch('https://www.strava.com/oauth/token', {
+            const response = await fetch(config.STRAVA_TOKEN_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -333,5 +235,4 @@ export class StravaApiService {
     }
 }
 
-// Export singleton instance
 export const stravaApiService = new StravaApiService();

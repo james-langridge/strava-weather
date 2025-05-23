@@ -133,31 +133,6 @@ export class WebhookSubscriptionService {
     }
 
     /**
-     * Setup webhook subscription (view or create)
-     */
-    async setupSubscription(baseUrl: string): Promise<WebhookSubscription> {
-        try {
-            // Check for existing subscription
-            const existing = await this.viewSubscription();
-
-            if (existing) {
-                console.log('ℹ️ Using existing webhook subscription');
-                return existing;
-            }
-
-            // Create new subscription
-            const callbackUrl = `${baseUrl}/api/strava/webhook`;
-            console.log(`📍 Setting up webhook with callback URL: ${callbackUrl}`);
-
-            return await this.createSubscription(callbackUrl);
-
-        } catch (error) {
-            console.error('❌ Failed to setup webhook subscription:', error);
-            throw error;
-        }
-    }
-
-    /**
      * Verify webhook endpoint is accessible
      */
     async verifyEndpoint(callbackUrl: string): Promise<boolean> {
@@ -198,5 +173,4 @@ export class WebhookSubscriptionService {
     }
 }
 
-// Export singleton instance
 export const webhookSubscriptionService = new WebhookSubscriptionService();

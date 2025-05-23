@@ -1,4 +1,4 @@
-import {weatherService, type WeatherData, WeatherService} from './weatherService.js';
+import {weatherService, type WeatherData} from './weatherService.js';
 import { stravaApiService } from './stravaApi.js';
 import { prisma } from '../lib/index.js';
 
@@ -199,109 +199,6 @@ export class ActivityProcessor {
     }
 
     /**
-     * Process multiple activities in batch
-     */
-    async processActivitiesBatch(
-        activityIds: string[],
-        userId: string,
-        forceUpdate: boolean = false
-    ): Promise<ProcessingResult[]> {
-        console.log(`🔄 Processing ${activityIds.length} activities for user ${userId}`);
-
-        const results: ProcessingResult[] = [];
-
-        // Process activities sequentially to avoid rate limits
-        for (const activityId of activityIds) {
-            try {
-                const result = await this.processActivity(activityId, userId, forceUpdate);
-                results.push(result);
-
-                // Small delay to avoid hitting rate limits
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-            } catch (error) {
-                console.error(`Failed to process activity ${activityId}:`, error);
-                results.push({
-                    success: false,
-                    activityId,
-                    error: error instanceof Error ? error.message : 'Batch processing error',
-                });
-            }
-        }
-
-        const successCount = results.filter(r => r.success).length;
-        const skippedCount = results.filter(r => r.skipped).length;
-        const failedCount = results.filter(r => !r.success && !r.skipped).length;
-
-        console.log(`📊 Batch processing complete: ${successCount} successful, ${skippedCount} skipped, ${failedCount} failed`);
-
-        return results;
-    }
-
-    /**
-     * Process all recent activities for a user
-     */
-    async processRecentActivities(userId: string, daysSince: number = 30): Promise<ProcessingResult[]> {
-        try {
-            console.log(`🔄 Processing recent activities (${daysSince} days) for user ${userId}`);
-
-            // Get user's Strava tokens
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: {
-                    accessToken: true,
-                    refreshToken: true,
-                    tokenExpiresAt: true,
-                    weatherEnabled: true,
-                },
-            });
-
-            if (!user || !user.weatherEnabled) {
-                console.log(`⚠️ User ${userId} not found or weather disabled`);
-                return [];
-            }
-
-            // Get recent activities from Strava (refresh token first)
-            const tokenData = await stravaApiService.ensureValidToken(
-                user.accessToken,
-                user.refreshToken,
-                user.tokenExpiresAt
-            );
-
-            // Update tokens in database if they were refreshed
-            if (tokenData.wasRefreshed) {
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: {
-                        accessToken: tokenData.accessToken,
-                        refreshToken: tokenData.refreshToken,
-                        tokenExpiresAt: tokenData.expiresAt,
-                        updatedAt: new Date(),
-                    },
-                });
-                console.log(`🔄 Refreshed tokens for user ${userId}`);
-            }
-
-            const sinceTimestamp = Math.floor((Date.now() - (daysSince * 24 * 60 * 60 * 1000)) / 1000);
-            const activities = await stravaApiService.getActivities(tokenData.accessToken, sinceTimestamp);
-
-            if (!activities || activities.length === 0) {
-                console.log(`📭 No recent activities found for user ${userId}`);
-                return [];
-            }
-
-            console.log(`📋 Found ${activities.length} recent activities to process`);
-
-            const activityIds = activities.map(activity => activity.id.toString());
-            return await this.processActivitiesBatch(activityIds, userId);
-
-        } catch (error) {
-            console.error(`Failed to process recent activities for user ${userId}:`, error);
-            return [];
-        }
-    }
-
-    /**
      * Create weather-enhanced description for activity
      */
     private createWeatherDescription(activity: ActivityData, weatherData: WeatherData): string {
@@ -340,5 +237,4 @@ export class ActivityProcessor {
     }
 }
 
-// Export singleton instance
 export const activityProcessor = new ActivityProcessor();

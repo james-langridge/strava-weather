@@ -19,7 +19,7 @@ export interface WeatherData {
 }
 
 /**
- * Weather Service using One Call API 3.0 for maximum accuracy
+ * Weather Service using One Call API 3.0
  */
 export class WeatherService {
     private weatherCache: Map<string, WeatherData>;
@@ -32,7 +32,6 @@ export class WeatherService {
 
     /**
      * Get weather data for a specific activity
-     * Always uses One Call API for best accuracy
      */
     async getWeatherForActivity(
         lat: number,
@@ -103,15 +102,6 @@ export class WeatherService {
         const response = await axios.get(url, { params, timeout: 5000 });
         const current = response.data.current;
 
-        // Log for debugging
-        console.log(`📊 One Call Response:`, {
-            temp: `${current.temp}°C`,
-            feels_like: `${current.feels_like}°C`,
-            humidity: `${current.humidity}%`,
-            wind: `${current.wind_speed}m/s from ${current.wind_deg}°`,
-            location: response.data.timezone
-        });
-
         return {
             temperature: Math.round(current.temp),
             temperatureFeel: Math.round(current.feels_like),
@@ -150,15 +140,6 @@ export class WeatherService {
 
         const response = await axios.get(url, { params, timeout: 5000 });
         const data = response.data.data[0]; // Time Machine returns array with single item
-
-        // Log for debugging
-        console.log(`📊 Time Machine Response:`, {
-            temp: `${data.temp}°C`,
-            feels_like: `${data.feels_like}°C`,
-            humidity: `${data.humidity}%`,
-            wind: `${data.wind_speed}m/s from ${data.wind_deg}°`,
-            time: new Date(data.dt * 1000).toISOString()
-        });
 
         return {
             temperature: Math.round(data.temp),
@@ -220,21 +201,6 @@ export class WeatherService {
         this.weatherCache.clear();
         console.log('🧹 Weather cache cleared');
     }
-
-    /**
-     * Get weather emoji based on condition and icon
-     */
-    static getWeatherEmoji(condition: string, icon: string): string {
-        const iconMap: Record<string, string> = {
-            '01d': '☀️', '01n': '🌙', '02d': '⛅', '02n': '☁️',
-            '03d': '☁️', '03n': '☁️', '04d': '☁️', '04n': '☁️',
-            '09d': '🌧️', '09n': '🌧️', '10d': '🌦️', '10n': '🌧️',
-            '11d': '⛈️', '11n': '⛈️', '13d': '❄️', '13n': '❄️',
-            '50d': '🌫️', '50n': '🌫️',
-        };
-        return iconMap[icon] || '🌤️';
-    }
 }
 
-// Export singleton instance
 export const weatherService = new WeatherService();

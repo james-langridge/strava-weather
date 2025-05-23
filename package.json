@@ -2,6 +2,20 @@
   "name": "strava-weather",
   "version": "1.0.0",
   "description": "Automatically add weather data to Strava activities using webhooks",
+  "author": "James Langridge <l@ngridge.com> (https://github.com/james-langridge)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/james-langridge/strava-weather.git"
+  },
+  "bugs": "https://github.com/james-langridge/strava-weather/issues",
+  "keywords": [
+    "strava",
+    "weather",
+    "reactjs",
+    "express",
+    "openweathermap-api"
+  ],
+  "license": "MIT",
   "private": true,
   "workspaces": ["api", "web"],
   "scripts": {
@@ -31,20 +45,5 @@
   "engines": {
     "node": ">=22.11.0",
     "npm": ">=10.0.0"
-  },
-  "keywords": [
-    "strava",
-    "weather",
-    "webhooks",
-    "typescript",
-    "react",
-    "express",
-    "prisma"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/james-langridge/strava-weather.git"
   }
 }

@@ -161,28 +161,3 @@ export async function authenticateUser(
         });
     }
 }
-
-/**
- * Set authentication cookie
- */
-export function setAuthCookie(res: Response, token: string): void {
-    res.cookie(config.SESSION_COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: config.isProduction,
-        sameSite: 'lax',
-        maxAge: config.SESSION_MAX_AGE,
-        path: '/',
-    });
-}
-
-/**
- * Clear authentication cookie
- */
-export function clearAuthCookie(res: Response): void {
-    res.clearCookie(config.SESSION_COOKIE_NAME, {
-        httpOnly: true,
-        secure: config.isProduction,
-        sameSite: 'lax',
-        path: '/',
-    });
-}

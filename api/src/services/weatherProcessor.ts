@@ -31,6 +31,7 @@ interface WeatherData {
     uvIndex?: number;
 }
 
+// todo remove this?
 /**
  * Process weather data for a Strava activity
  * This is called asynchronously after webhook response
@@ -64,24 +65,18 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
             return;
         }
 
-        // Step 3: Check if it's an outdoor activity with location
-        // if (!isOutdoorActivity(activity.type)) {
-        //     console.log(`⚠️ Activity ${activity.id} is not an outdoor activity (${activity.type})`);
-        //     return;
-        // }
-
         if (!activity.start_latlng || activity.start_latlng.length !== 2) {
             console.log(`⚠️ Activity ${activity.id} has no GPS coordinates`);
             return;
         }
 
-        // Step 4: Check if weather already added (prevent duplicates)
+        // Step 3: Check if weather already added (prevent duplicates)
         if (hasWeatherInDescription(activity.description)) {
             console.log(`⚠️ Weather already added to activity ${activity.id}`);
             return;
         }
 
-        // Step 5: Fetch weather data
+        // Step 4: Fetch weather data
         const [lat, lon] = activity.start_latlng;
         const activityDate = new Date(activity.start_date);
 
@@ -92,10 +87,10 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
             return;
         }
 
-        // Step 6: Format weather description
+        // Step 5: Format weather description
         const weatherDescription = formatWeatherDescription(weatherData);
 
-        // Step 7: Update activity description
+        // Step 6: Update activity description
         const updatedDescription = addWeatherToDescription(activity.description, weatherDescription);
 
         await updateStravaActivityDescription(activity.id, updatedDescription, user.accessToken);
@@ -107,8 +102,7 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
         const processingTime = Date.now() - startTime;
         console.error(`❌ Weather processing failed for activity ${data.stravaActivityId} in ${processingTime}ms:`, error);
 
-        // TODO: When we scale, implement retry logic here
-        // For now, we just log and move on
+        // TODO: implement retry logic here
     }
 }
 
@@ -117,7 +111,6 @@ export async function processActivityWeather(data: ActivityProcessingData): Prom
  */
 function hasWeatherInDescription(description: string | null): boolean {
     if (!description) return false;
-    // Check for temperature patterns with °C or weather keywords
     return description.includes('°C') ||
         description.includes('Feels like') ||
         description.includes('Humidity') ||
@@ -152,13 +145,6 @@ async function fetchStravaActivity(activityId: string, accessToken: string): Pro
         return null;
     }
 }
-
-/**
- * Check if activity type should get weather data
- */
-// function isOutdoorActivity(activityType: string): boolean {
-//     return config.OUTDOOR_ACTIVITY_TYPES.includes(activityType);
-// }
 
 /**
  * Fetch weather data from OpenWeatherMap

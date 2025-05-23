@@ -33,9 +33,6 @@ const environmentSchema = z.object({
 
     // JWT Secret for session tokens
     JWT_SECRET: z.string().min(32),
-
-    // Encryption key for storing sensitive data
-    ENCRYPTION_KEY: z.string().min(32),
 });
 
 // Parse and validate environment variables
@@ -55,7 +52,6 @@ export const config = {
     // Computed values
     isDevelopment: parseResult.data.NODE_ENV === 'development',
     isProduction: parseResult.data.NODE_ENV === 'production',
-    isTest: parseResult.data.NODE_ENV === 'test',
 
     // Strava OAuth URLs
     STRAVA_OAUTH_URL: 'https://www.strava.com/oauth/authorize',
@@ -66,51 +62,8 @@ export const config = {
     OPENWEATHERMAP_API_BASE_URL: 'https://api.openweathermap.org/data/2.5',
     OPENWEATHERMAP_ONECALL_URL: 'https://api.openweathermap.org/data/3.0/onecall',
 
-    // Rate limiting
-    STRAVA_RATE_LIMITS: {
-        requests_per_15_minutes: 100,
-        requests_per_day: 1000,
-    },
-
-    // Background processing
-    ASYNC_PROCESSING: {
-        timeout: 30000, // 30 seconds max for weather processing
-        retries: 3, // Retry failed attempts 3 times
-    },
-
     // Security
     SESSION_COOKIE_NAME: 'strava-weather-session',
-    SESSION_MAX_AGE: 30 * 24 * 60 * 60 * 1000, // 30 days
-
-    // Weather processing
-    WEATHER_CACHE_TTL: 15 * 60, // 15 minutes
-    OUTDOOR_ACTIVITY_TYPES: [
-        'Run',
-        'Ride',
-        'Walk',
-        'Hike',
-        'AlpineSki',
-        'BackcountrySki',
-        'Canoeing',
-        'Crossfit',
-        'EBikeRide',
-        'Kayaking',
-        'Kitesurf',
-        'MountainBikeRide',
-        'NordicSki',
-        'RockClimbing',
-        'RollerSki',
-        'Rowing',
-        'Sailing',
-        'Skateboard',
-        'Snowboard',
-        'Snowshoe',
-        'StandUpPaddling',
-        'Surfing',
-        'Swim',
-        'TrailRun',
-        'Windsurf',
-    ],
 } as const;
 
 // Type export for use in other files
