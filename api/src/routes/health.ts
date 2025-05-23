@@ -236,4 +236,80 @@ healthRouter.get('/live', (req: Request, res: Response) => {
     });
 });
 
+/**
+ * GET /api/health/migrations - Check database migration status
+ */
+healthRouter.get('/migrations', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const migrationStatus = await checkMigrationStatus();
+
+        res.status(migrationStatus.isHealthy ? 200 : 503).json({
+            status: migrationStatus.isHealthy ? 'healthy' : 'unhealthy',
+            timestamp: new Date().toISOString(),
+            migrations: migrationStatus
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Check if database migrations have been applied
+ */
+async function checkMigrationStatus(): Promise<{
+    isHealthy: boolean;
+    hasTables: boolean;
+    tableCount: number;
+    error?: string;
+}> {
+    try {
+        // Check if essential tables exist
+        const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_type = 'BASE TABLE'
+            AND table_name IN ('users', 'user_preferences', '_prisma_migrations')
+        `;
+
+        const tableNames = tables.map(t => t.table_name);
+        const hasUserTable = tableNames.includes('users');
+        const hasPreferencesTable = tableNames.includes('user_preferences');
+        const hasMigrationsTable = tableNames.includes('_prisma_migrations');
+
+        // Check migration status
+        if (hasMigrationsTable) {
+            const pendingMigrations = await prisma.$queryRaw<Array<{ count: number }>>`
+                SELECT COUNT(*) as count 
+                FROM _prisma_migrations 
+                WHERE finished_at IS NULL
+            `;
+
+            const pendingCount = Number(pendingMigrations[0]?.count || 0);
+
+            return {
+                isHealthy: hasUserTable && hasPreferencesTable && pendingCount === 0,
+                hasTables: hasUserTable && hasPreferencesTable,
+                tableCount: tableNames.length,
+                error: pendingCount > 0 ? `${pendingCount} pending migrations` : undefined
+            };
+        }
+
+        return {
+            isHealthy: false,
+            hasTables: false,
+            tableCount: 0,
+            error: 'No migrations table found - database not initialized'
+        };
+
+    } catch (error) {
+        return {
+            isHealthy: false,
+            hasTables: false,
+            tableCount: 0,
+            error: error instanceof Error ? error.message : 'Failed to check migration status'
+        };
+    }
+}
+
 export { healthRouter  };
