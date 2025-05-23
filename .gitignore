@@ -104,5 +104,4 @@ Thumbs.db
 .turbo
 
 # Prisma
-migrations/
 prisma/*.db
