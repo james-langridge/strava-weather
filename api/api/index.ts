@@ -44,10 +44,6 @@ const server = app.listen(port, async () => {
     console.log(`🔗 Webhook endpoint: http://localhost:${port}/api/strava/webhook`);
     console.log(`🔐 OAuth flow: http://localhost:${port}/api/auth/strava`);
     console.log(`👨‍💼 Admin endpoints: http://localhost:${port}/api/admin/webhook/*`);
-
-    // Setup webhook subscription after server starts
-    const { setupWebhookOnStartup } = await import('../src/services/startupWebhookSetup.js');
-    await setupWebhookOnStartup();
 });
 
 // Graceful shutdown

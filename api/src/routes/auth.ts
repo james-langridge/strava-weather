@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { config } from '../config/environment.js';
-import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser } from '../services/auth.js';
+import { generateJWT, clearAuthCookie, authenticateUser } from '../services/auth.js';
 import { stravaApiService } from '../services/stravaApi.js';
-import { AppError } from '../middleware/errorHandler.js';
 import { prisma} from "../lib/index.js";
+import {ensureWebhooksInitialized} from "../utils/initWebhooks.js";
 
 const authRouter = Router();
 
@@ -121,6 +121,8 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
             });
 
             console.log(`✅ Updated user ${user.id} (${user.firstName} ${user.lastName})`);
+
+            await ensureWebhooksInitialized();
 
             // Generate JWT token using your existing function
             const token = generateJWT(user.id, user.stravaAthleteId);
