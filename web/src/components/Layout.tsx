@@ -52,34 +52,21 @@ export function Layout({ children }: LayoutProps) {
             </nav>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <main className="mx-auto py-6">
                 {children}
             </main>
 
             {/* Footer */}
-            <footer className="bg-white border-t border-gray-200 mt-auto">
-                <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center text-sm text-gray-500">
-                        <p>
-                            Strava Weather Integration - Add weather data to your activities
-                        </p>
-                        <div className="flex space-x-4">
-                            <a
-                                href="https://strava.com"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-gray-700 transition-colors"
-                            >
-                                Strava
-                            </a>
-                            <a
-                                href="https://openweathermap.org"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-gray-700 transition-colors"
-                            >
-                                OpenWeather
-                            </a>
+            <footer className="border-grid border-t py-6 md:py-0">
+                <div className="container-wrapper">
+                    <div className="container py-4">
+                        <div
+                            className="text-balance text-center text-sm leading-loose text-muted-foreground md:text-left">Built
+                            by <a href="https://www.ngridge.com/en" target="_blank" rel="noreferrer"
+                                          className="font-medium underline underline-offset-4">James Langridge</a>. The source
+                            code is available on <a href="https://github.com/james-langridge/strava-weather" target="_blank"
+                                                            rel="noreferrer"
+                                                            className="font-medium underline underline-offset-4">GitHub</a>.
                         </div>
                     </div>
                 </div>

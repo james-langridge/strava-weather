@@ -29,16 +29,6 @@ export function Dashboard() {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-
     if (!user) {
         return (
             <div className="text-center py-12">
@@ -70,21 +60,10 @@ export function Dashboard() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                        {user.profileImageUrl && (
-                            <img
-                                src={user.profileImageUrl}
-                                alt={user.displayName}
-                                className="w-16 h-16 rounded-full border-2 border-gray-200"
-                            />
-                        )}
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">
                                 Welcome back, {user.firstName || 'Athlete'}! 👋
                             </h1>
-                            <p className="text-gray-600 mt-1">
-                                {user.location && `📍 ${user.location} • `}
-                                Member since {formatDate(user.memberSince)}
-                            </p>
                         </div>
                     </div>
 
