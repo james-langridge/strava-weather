@@ -1,5 +1,6 @@
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext.tsx';
+import { useAuth } from '../contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -9,42 +10,42 @@ export function Layout({ children }: LayoutProps) {
     const { user, logout } = useAuth();
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
             {/* Navigation */}
-            <nav className="bg-white shadow-sm border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
+            <nav className="px-2 sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div className="flex h-16 items-center">
+                    <div className="flex w-full items-center justify-between">
                         {/* Logo/Brand */}
-                        <div className="flex items-center">
-                            <h1 className="text-xl font-bold text-gray-900">
-                                ⛅ Strava Weather
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">⛅</span>
+                            <h1 className="text-xl font-bold">
+                                Strava Weather
                             </h1>
                         </div>
 
                         {/* User Menu */}
                         {user && (
-                            <div className="flex items-center space-x-4">
-                                <div className="flex items-center space-x-3">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3">
                                     {user.profileImageUrl && (
                                         <img
                                             src={user.profileImageUrl}
                                             alt={user.displayName}
-                                            className="w-8 h-8 rounded-full border border-gray-300"
+                                            className="h-8 w-8 rounded-full ring-2 ring-background"
                                         />
                                     )}
-                                    <span className="text-sm font-medium text-gray-700">
-                    {user.displayName}
-                  </span>
+                                    <span className="text-sm font-medium">
+                                        {user.displayName}
+                                    </span>
                                 </div>
 
-                                <div className="relative">
-                                    <button
-                                        onClick={logout}
-                                        className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
-                                    >
-                                        Sign Out
-                                    </button>
-                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={logout}
+                                >
+                                    Sign Out
+                                </Button>
                             </div>
                         )}
                     </div>
@@ -52,23 +53,34 @@ export function Layout({ children }: LayoutProps) {
             </nav>
 
             {/* Main Content */}
-            <main className="mx-auto py-6">
+            <main className="container py-6 mx-auto px-3 flex-1">
                 {children}
             </main>
 
-            {/* Footer */}
-            <footer className="border-grid border-t py-6 md:py-0">
-                <div className="container-wrapper">
-                    <div className="container py-4">
-                        <div
-                            className="text-balance text-center text-sm leading-loose text-muted-foreground md:text-left">Built
-                            by <a href="https://www.ngridge.com/en" target="_blank" rel="noreferrer"
-                                          className="font-medium underline underline-offset-4">James Langridge</a>. The source
-                            code is available on <a href="https://github.com/james-langridge/strava-weather" target="_blank"
-                                                            rel="noreferrer"
-                                                            className="font-medium underline underline-offset-4">GitHub</a>.
-                        </div>
-                    </div>
+            {/* Footer  */}
+            <footer className="border-t px-2 mt-auto">
+                <div className="container flex h-16 items-center py-4">
+                    <p className="text-sm text-muted-foreground">
+                        Built by{' '}
+                        <a
+                            href="https://www.ngridge.com/en"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium underline underline-offset-4 hover:text-primary"
+                        >
+                            James Langridge
+                        </a>
+                        . The source code is available on{' '}
+                        <a
+                            href="https://github.com/james-langridge/strava-weather"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium underline underline-offset-4 hover:text-primary"
+                        >
+                            GitHub
+                        </a>
+                        .
+                    </p>
                 </div>
             </footer>
         </div>

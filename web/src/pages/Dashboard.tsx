@@ -1,6 +1,11 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext.tsx';
-import { api } from '../lib/api.ts';
+import { useAuth } from '../contexts/AuthContext';
+import { api } from '../lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { CloudRain, AlertCircle } from 'lucide-react';
 
 export function Dashboard() {
     const { user, updateUser } = useAuth();
@@ -14,13 +19,9 @@ export function Dashboard() {
             setUpdating(true);
             setError(null);
 
-            console.log('🔄 Updating weather preferences...');
-
             const newEnabled = !user.weatherEnabled;
             await api.updateUserPreferences({ weatherEnabled: newEnabled });
             updateUser({ weatherEnabled: newEnabled });
-
-            console.log('✅ Weather preferences updated');
         } catch (error) {
             console.error('Failed to update preferences:', error);
             setError(error instanceof Error ? error.message : 'Failed to update preferences');
@@ -31,84 +32,119 @@ export function Dashboard() {
 
     if (!user) {
         return (
-            <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900">Not authenticated</h2>
-                <p className="text-gray-600 mt-2">Please sign in to view your dashboard</p>
+            <div className="flex min-h-[50vh] items-center justify-center">
+                <Card className="w-full max-w-md">
+                    <CardHeader className="text-center">
+                        <CardTitle>Not Authenticated</CardTitle>
+                        <CardDescription>Please sign in to view your dashboard</CardDescription>
+                    </CardHeader>
+                </Card>
             </div>
         );
     }
 
+    const memberSinceDate = new Date(user.memberSince);
+    const lastUpdatedDate = new Date(user.lastUpdated);
+
     return (
-        <div className="space-y-6">
-            {/* Error Banner */}
+        <div className="space-y-6 max-w-4xl mx-auto">
+            {/* Error Alert */}
             {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex">
-                        <div className="text-red-400">
-                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                            </svg>
-                        </div>
-                        <div className="ml-3">
-                            <p className="text-sm text-red-700">{error}</p>
-                        </div>
-                    </div>
-                </div>
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
 
-            {/* Welcome Header */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+            {/* Welcome Section */}
+            <div className="space-y-1">
+                <h1 className="text-3xl font-bold tracking-tight">
+                    Welcome back, {user.firstName || 'Athlete'}! 👋
+                </h1>
+                <p className="text-muted-foreground">
+                    Manage your weather updates
+                </p>
+            </div>
+
+            {/* Weather Settings Card */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <CardTitle className="flex items-center gap-2">
+                                <CloudRain className="h-5 w-5" />
+                                Weather Updates
+                            </CardTitle>
+                            <CardDescription>
+                                Automatically add weather data to your Strava activities
+                            </CardDescription>
+                        </div>
+                        <Badge variant={user.weatherEnabled ? "default" : "secondary"}>
+                            {user.weatherEnabled ? 'Active' : 'Inactive'}
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium">Enable Weather Updates</p>
+                            <p className="text-sm text-muted-foreground">
+                                {user.weatherEnabled
+                                    ? 'New activities will automatically get weather data'
+                                    : 'Turn on to start adding weather data to activities'
+                                }
+                            </p>
+                        </div>
+                        <Switch
+                            checked={user.weatherEnabled}
+                            onCheckedChange={toggleWeatherEnabled}
+                            disabled={updating}
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Account Info Card */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Account Information</CardTitle>
+                    <CardDescription>Your Strava Weather account details</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-900">
-                                Welcome back, {user.firstName || 'Athlete'}! 👋
-                            </h1>
+                            <p className="text-muted-foreground">Strava ID</p>
+                            <p className="font-medium">{user.stravaAthleteId}</p>
+                        </div>
+                        <div>
+                            <p className="text-muted-foreground">Location</p>
+                            <p className="font-medium">{user.location || 'Not set'}</p>
+                        </div>
+                        <div>
+                            <p className="text-muted-foreground">Member Since</p>
+                            <p className="font-medium">
+                                {memberSinceDate.toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-muted-foreground">Last Updated</p>
+                            <p className="font-medium">
+                                {lastUpdatedDate.toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </p>
                         </div>
                     </div>
-
-                    {/* Weather Toggle */}
-                    <div className="flex items-center space-x-3">
-                        <label className="text-sm font-medium text-gray-700">
-                            Weather Updates
-                        </label>
-                        <button
-                            onClick={toggleWeatherEnabled}
-                            disabled={updating}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                user.weatherEnabled
-                                    ? 'bg-green-500 hover:bg-green-600'
-                                    : 'bg-gray-300 hover:bg-gray-400'
-                            } ${updating ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-              <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      user.weatherEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-              />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Weather Status */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Weather Updates</h2>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${user.weatherEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        <span className="text-sm font-medium text-gray-700">
-              {user.weatherEnabled ? 'Enabled' : 'Disabled'}
-            </span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                        {user.weatherEnabled
-                            ? 'New activities will automatically get weather data added'
-                            : 'Enable weather updates to start adding weather data to activities'
-                        }
-                    </p>
-                </div>
-            </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

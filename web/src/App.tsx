@@ -1,12 +1,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
-import { Layout } from './components/Layout.tsx';
-import { Landing } from './pages/Landing.tsx';
-import { Dashboard } from './pages/Dashboard.tsx';
-import { AuthSuccess } from './pages/AuthSuccess.tsx';
-import { AuthError } from './pages/AuthError.tsx';
-import './App.css';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Layout } from './components/Layout';
+import { Landing } from './pages/Landing';
+import { Dashboard } from './pages/Dashboard';
+import { AuthSuccess } from './pages/AuthSuccess';
+import { AuthError } from './pages/AuthError';
+import { Card, CardContent } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -14,11 +15,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading...</p>
-                </div>
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Card className="w-fit">
+                    <CardContent className="flex flex-col items-center gap-2 pt-6">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Loading...</p>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -36,11 +39,13 @@ function AppRoutes() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Checking authentication...</p>
-                </div>
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Card className="w-fit">
+                    <CardContent className="flex flex-col items-center gap-2 pt-6">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Checking authentication...</p>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
