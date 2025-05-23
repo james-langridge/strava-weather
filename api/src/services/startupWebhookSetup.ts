@@ -5,6 +5,12 @@ import { webhookSubscriptionService } from './webhookSubscription.js';
  * Automatically setup webhook subscription on app startup
  */
 export async function setupWebhookOnStartup(): Promise<void> {
+    console.log('🚀 Webhook setup started!');
+    console.log('Environment vars check:');
+    console.log('- VITE_API_URL:', config.VITE_API_URL);
+    console.log('- isProduction:', config.isProduction);
+    console.log('- VERCEL_URL:', process.env.VERCEL_URL);
+
     try {
         console.log('\n🔄 Checking Strava webhook subscription...');
 
