@@ -5,8 +5,8 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "build": "tsx scripts/build.ts",
-    "vercel-build": "npm run build",
+    "build": "prisma generate && tsc",
+    "vercel-build": "prisma generate && prisma migrate deploy && tsc",
     "dev": "tsx watch api/index.ts",
     "start": "node dist/index.js",
     "test": "jest",
