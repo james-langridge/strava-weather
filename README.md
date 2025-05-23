@@ -109,27 +109,7 @@ openssl rand -base64 32
 3. Update **Authorization Callback Domain** to your API domain (without https://)
    - Example: `strava-weather-api.vercel.app`
 
-### 5. Set Up Webhooks
-
-The API will attempt to set up webhooks automatically on startup. If it doesn't work:
-
-#### Option A: Via Admin API
-```bash
-# First, add ADMIN_TOKEN to your API environment variables in Vercel
-# Then:
-curl -X POST https://your-api-url.vercel.app/api/admin/webhook/setup \
-  -H "X-Admin-Token: your_admin_token"
-```
-
-#### Option B: Via Script (requires local setup)
-```bash
-git clone https://github.com/james-langridge/strava-weather.git
-cd strava-weather/api
-npm install
-npm run webhook:setup -- --url https://your-api-url.vercel.app
-```
-
-### 6. Test Your Setup
+### 5. Test Your Setup
 
 1. Visit your web app URL
 2. Click "Connect to Strava"
@@ -151,44 +131,6 @@ npm run webhook:setup -- --url https://your-api-url.vercel.app
 | `VITE_API_URL` | Your deployed API URL | `https://your-api.vercel.app` |
 | `FRONTEND_URL` | Your deployed web URL | `https://your-web.vercel.app` |
 | `ADMIN_TOKEN` | (Optional) For admin endpoints | `your-admin-token` |
-
-### Webhook Issues
-
-Check webhook status:
-```bash
-# Using admin API
-curl https://your-api-url.vercel.app/api/admin/webhook/status \
-  -H "X-Admin-Token: your_admin_token"
-
-# Or using script
-cd api
-npm run webhook:status
-```
-
-View Vercel function logs:
-1. Go to your API project on Vercel
-2. Click "Functions" tab
-3. Click on "api/index"
-4. View real-time logs
-
-### Common Issues
-
-1. **"No webhook subscription found"**
-   - Make sure `VITE_API_URL` is set correctly in your API environment
-   - Try manual webhook setup (see above)
-
-2. **OAuth redirect fails**
-   - Check that `FRONTEND_URL` in API matches your web app URL
-   - Verify Strava callback domain matches API domain
-
-3. **Weather data not appearing**
-   - Check Vercel function logs for errors
-   - Ensure OpenWeatherMap API key is valid and One Call API 3.0 is enabled
-   - Verify the activity has GPS coordinates
-
-4. **Database connection errors**
-   - Ensure `DATABASE_URL` includes `?sslmode=require`
-   - Check that your Neon database is active
 
 ## Local Development
 
@@ -223,20 +165,13 @@ ngrok http 3001
 # Use the ngrok URL for webhook setup
 ```
 
-## Architecture
+## Tech Stack
 
 - **API**: Express.js server handling Strava OAuth, webhooks, and weather processing
 - **Database**: PostgreSQL (Neon) storing user tokens and preferences
 - **Weather**: OpenWeatherMap One Call API 3.0 for accurate weather data
 - **Frontend**: React SPA for user management and settings
 - **Deployment**: Separate Vercel projects for optimal performance
-
-## Security Notes
-
-- User tokens are encrypted before database storage
-- JWT tokens used for session management
-- Webhook signatures validated (when enabled)
-- All sensitive operations require authentication
 
 ## Support
 
