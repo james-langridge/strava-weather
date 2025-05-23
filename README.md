@@ -86,7 +86,11 @@ openssl rand -base64 32
 #### Step 1: Deploy the API
 1. Click the "Deploy API" button above
 2. When prompted, enter all environment variables
-3. Note your API URL after deployment (e.g., `https://strava-weather-api.vercel.app`)
+3. The deployment will automatically:
+   - Generate Prisma client
+   - Run database migrations
+   - Build the TypeScript code
+4. Note your API URL after deployment (e.g., `https://strava-weather-api.vercel.app`)
 
 #### Step 2: Deploy the Web App
 1. Click the "Deploy Web" button above
