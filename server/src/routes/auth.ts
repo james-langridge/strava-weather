@@ -162,9 +162,12 @@ authRouter.post('/logout', (req: Request, res: Response) => {
  */
 authRouter.get('/check', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+        console.log('🍪 Cookies received:', req.cookies);
+        console.log('🔍 Looking for cookie:', config.SESSION_COOKIE_NAME);
         const token = req.cookies?.[config.SESSION_COOKIE_NAME];
 
         if (!token) {
+            console.log('❌ No auth token found in cookies');
             res.json({
                 authenticated: false,
             });
