@@ -96,43 +96,18 @@ function extractTokenFromRequest(req: Request): string | null {
  * Set secure HTTP-only cookie with JWT
  */
 export function setAuthCookie(res: Response, token: string): void {
-    // Extract domain from FRONTEND_URL for cookie domain
-    // For example: https://web.example.com -> .example.com
-    let cookieDomain: string | undefined;
-
-    try {
-        const frontendUrl = new URL(config.FRONTEND_URL);
-        const hostname = frontendUrl.hostname;
-
-        // If it's a subdomain, set cookie for parent domain
-        // This allows cookie sharing between api.example.com and web.example.com
-        const parts = hostname.split('.');
-        if (parts.length > 2) {
-            // Remove subdomain, keep domain.tld
-            cookieDomain = '.' + parts.slice(-2).join('.');
-        } else if (parts.length === 2 && !hostname.includes('localhost')) {
-            // For example.com, set .example.com
-            cookieDomain = '.' + hostname;
-        }
-        // For localhost or IP addresses, don't set domain
-    } catch (error) {
-        console.warn('Could not parse FRONTEND_URL for cookie domain:', error);
-    }
-
     const cookieOptions = {
-        httpOnly: true, // Prevents JavaScript access (XSS protection)
-        secure: config.isProduction, // HTTPS only in production
-        sameSite: 'lax' as const, // CSRF protection
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
-        path: '/', // Cookie available for all paths
+        httpOnly: true,
+        secure: true, // Always true for production
+        sameSite: 'lax' as const,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: '/',
+        // Don't set domain - let browser handle it
     };
 
     res.cookie(config.SESSION_COOKIE_NAME, token, cookieOptions);
 
-    console.log(`🍪 Set auth cookie with options:`, {
-        ...cookieOptions,
-        token: token.substring(0, 10) + '...' // Log partial token for debugging
-    });
+    console.log(`🍪 Set auth cookie: ${config.SESSION_COOKIE_NAME}`);
 }
 
 /**
