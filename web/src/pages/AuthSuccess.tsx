@@ -3,42 +3,41 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { useNavigate } from "react-router";
 
 export function AuthSuccess() {
-    const { login } = useAuth();
+    const { login, user } = useAuth();
     const hasProcessed = useRef(false);
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (hasProcessed.current) return;
+        // If user is already set, go straight to dashboard
+        if (user) {
+            console.log('User already authenticated, redirecting to dashboard');
+            navigate('/dashboard', { replace: true });
+            return;
+        }
 
-        // Mark as processed to prevent multiple calls
+        if (hasProcessed.current) return;
         hasProcessed.current = true;
 
         const processAuth = async () => {
             try {
                 console.log('🔐 Processing authentication...');
-
-                // The OAuth callback has already set the HTTP-only cookie
-                // We just need to verify and fetch user data
-                const result = await login();
-                console.log('Login result:', result);
-
-                console.log('✅ Authentication successful, redirecting to dashboard...');
-
-                // Redirect to dashboard after a short delay
-                setTimeout(() => {
-                    navigate('/dashboard');
-                }, 2000);
-
+                await login();
+                // Don't navigate here - let the user state update trigger navigation
             } catch (error) {
                 console.error('Failed to process authentication:', error);
-                setTimeout(() => {
-                    navigate('/auth/error?error=auth_failed');
-                }, 2000);
+                navigate('/auth/error?error=auth_failed', { replace: true });
             }
         };
 
         processAuth();
-    }, []); // Empty dependency array
+    }, [user, login, navigate]);
+
+    useEffect(() => {
+        if (user) {
+            console.log('✅ User state updated, redirecting to dashboard...');
+            navigate('/dashboard', { replace: true });
+        }
+    }, [user, navigate]);
 
     // Check if this is a new user
     const urlParams = new URLSearchParams(window.location.search);

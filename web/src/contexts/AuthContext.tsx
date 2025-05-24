@@ -40,11 +40,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }, [hasChecked]);
 
     const checkAuthStatus = async () => {
+        // Skip if we're already in the process of setting a user
+        if (user) return;
+
         try {
             setLoading(true);
             setError(null);
 
-            // First check if we have an auth cookie
             const isAuthenticated = await api.checkAuth();
 
             if (!isAuthenticated) {
@@ -52,14 +54,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 return;
             }
 
-            // If authenticated, fetch user data
             const currentUser = await api.getCurrentUser();
             setUser(currentUser);
-
         } catch (error) {
             console.log('Not authenticated:', error);
             setUser(null);
-
         } finally {
             setLoading(false);
             setHasChecked(true);
@@ -75,16 +74,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 console.warn('Token parameter is deprecated - authentication is handled via cookies');
             }
 
+            console.log('🔍 Checking authentication status...');
             // Check if we're already authenticated (have cookie from OAuth callback)
             const isAuthenticated = await api.checkAuth();
+            console.log('🔐 Authentication check result:', isAuthenticated);
 
             if (isAuthenticated) {
                 // Fetch user data
+                console.log('✅ User is authenticated, fetching user data...');
                 const currentUser = await api.getCurrentUser();
                 setUser(currentUser);
                 console.log(`✅ Login successful: ${currentUser.displayName}`);
             } else {
                 // No cookie, redirect to OAuth
+                console.log('❌ Not authenticated, redirecting to OAuth...');
                 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
                 window.location.href = `${apiBase}/api/auth/strava`;
             }
