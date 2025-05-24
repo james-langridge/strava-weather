@@ -169,7 +169,10 @@ authRouter.get('/check', async (req: Request, res: Response, next: NextFunction)
         if (!token) {
             console.log('❌ No auth token found in cookies');
             res.json({
-                authenticated: false,
+                success: false,
+                data: {
+                    authenticated: false,
+                }
             });
             return;
         }
@@ -179,12 +182,20 @@ authRouter.get('/check', async (req: Request, res: Response, next: NextFunction)
             const decoded = verifyJWT(token);
             console.log('✅ Token verified:', decoded);
             res.json({
-                authenticated: true,
+                success: true,
+                data: {
+                    authenticated: true,
+                }
             });
         } catch (error) {
             // Token is invalid or expired
             console.log('❌ Token verification failed:', error);
-            res.json({ authenticated: false });
+            res.json({
+                success: false,
+                data: {
+                    authenticated: false
+                }
+            });
         }
     } catch (error) {
         next(error);
