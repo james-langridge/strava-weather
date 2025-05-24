@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import { useNavigate } from "react-router";
 
 export function AuthSuccess() {
     const { login } = useAuth();
     const hasProcessed = useRef(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (hasProcessed.current) return;
@@ -17,19 +19,20 @@ export function AuthSuccess() {
 
                 // The OAuth callback has already set the HTTP-only cookie
                 // We just need to verify and fetch user data
-                await login();
+                const result = await login();
+                console.log('Login result:', result);
 
                 console.log('✅ Authentication successful, redirecting to dashboard...');
 
                 // Redirect to dashboard after a short delay
                 setTimeout(() => {
-                    window.location.href = '/dashboard';
+                    navigate('/dashboard');
                 }, 2000);
 
             } catch (error) {
                 console.error('Failed to process authentication:', error);
                 setTimeout(() => {
-                    window.location.href = '/auth/error?error=auth_failed';
+                    navigate('/auth/error?error=auth_failed');
                 }, 2000);
             }
         };

@@ -90,16 +90,16 @@ class ApiClient {
     }
 
     async getCurrentUser(): Promise<User> {
-        const response = await this.request<User>('/api/users/me');
+        const response = await this.request<User>('/users/me');
         return response.data!;
     }
 
     async logout(): Promise<void> {
-        await this.request('/api/auth/logout', { method: 'POST' });
+        await this.request('/auth/logout', { method: 'POST' });
     }
 
     async revokeAccess(): Promise<void> {
-        await this.request('/api/auth/revoke', { method: 'DELETE' });
+        await this.request('/auth/revoke', { method: 'DELETE' });
     }
 
     // Check if user is authenticated (has valid cookie)
@@ -114,7 +114,7 @@ class ApiClient {
 
     // User management
     async updateUserPreferences(preferences: { weatherEnabled?: boolean }): Promise<User> {
-        const response = await this.request<User>('/api/users/me', {
+        const response = await this.request<User>('/users/me', {
             method: 'PATCH',
             body: JSON.stringify(preferences),
         });
@@ -122,12 +122,12 @@ class ApiClient {
     }
 
     async deleteAccount(): Promise<void> {
-        await this.request('/api/users/me', { method: 'DELETE' });
+        await this.request('/users/me', { method: 'DELETE' });
     }
 
     // Health check
     async getHealth(): Promise<{ status: string; timestamp: string; environment: string }> {
-        const response = await this.request<{ status: string; timestamp: string; environment: string }>('/api/health');
+        const response = await this.request<{ status: string; timestamp: string; environment: string }>('/health');
         return response.data!;
     }
 }

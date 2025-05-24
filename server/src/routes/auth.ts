@@ -176,15 +176,15 @@ authRouter.get('/check', async (req: Request, res: Response, next: NextFunction)
 
         // For a more secure check, we should verify the token
         try {
-            verifyJWT(token);
+            const decoded = verifyJWT(token);
+            console.log('✅ Token verified:', decoded);
             res.json({
                 authenticated: true,
             });
         } catch (error) {
             // Token is invalid or expired
-            res.json({
-                authenticated: false,
-            });
+            console.log('❌ Token verification failed:', error);
+            res.json({ authenticated: false });
         }
     } catch (error) {
         next(error);
