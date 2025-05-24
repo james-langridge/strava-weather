@@ -1,5 +1,5 @@
-import { config } from '../config/environment.js';
-import { prisma} from "../lib/index.js";
+import { config } from '../config/environment';
+import { prisma} from "../lib";
 import axios from "axios";
 
 interface ActivityProcessingData {

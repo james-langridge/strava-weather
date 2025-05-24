@@ -1,10 +1,11 @@
 {
-  "buildCommand": "npm run build:all",
+  "buildCommand": "npm run build:server && npm run build:web",
   "outputDirectory": "web/dist",
+  "installCommand": "npm install",
   "functions": {
     "api/index.js": {
       "maxDuration": 10,
-      "includeFiles": "api/**"
+      "includeFiles": "server/dist/**"
     }
   },
   "rewrites": [
@@ -14,7 +15,7 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/$1"
+      "destination": "/"
     }
   ]
 }

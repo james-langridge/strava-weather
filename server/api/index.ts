@@ -1,16 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { config } from '../src/config/environment.js';
-import { errorHandler} from "../src/middleware/errorHandler.js";
-import { requestLogger} from "../src/middleware/requestLogger.js";
+import { config } from '../src/config/environment';
+import { errorHandler} from "../src/middleware/errorHandler";
+import { requestLogger} from "../src/middleware/requestLogger";
 
-import { healthRouter} from "../src/routes/health.js";
-import { stravaRouter } from '../src/routes/strava.js';
-import { authRouter } from '../src/routes/auth.js';
-import { usersRouter } from '../src/routes/users.js';
-import { activitiesRouter } from '../src/routes/activities.js';
-import { adminRouter } from '../src/routes/admin.js';
+import { healthRouter} from "../src/routes/health";
+import { stravaRouter } from '../src/routes/strava';
+import { authRouter } from '../src/routes/auth';
+import { usersRouter } from '../src/routes/users';
+import { activitiesRouter } from '../src/routes/activities';
+import { adminRouter } from '../src/routes/admin';
 
 const app = express();
 
@@ -50,7 +50,7 @@ if (process.env.NODE_ENV !== 'production') {
             console.log('🚪 Server closed');
 
             // Cleanup webhook if needed (only in dev by default)
-            const { cleanupWebhookOnShutdown } = await import('../src/services/startupWebhookSetup.js');
+            const { cleanupWebhookOnShutdown } = await import('../src/services/startupWebhookSetup');
             await cleanupWebhookOnShutdown();
 
             process.exit(0);

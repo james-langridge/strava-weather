@@ -1,5 +1,5 @@
-import { config } from '../config/environment.js';
-import { setupWebhookOnStartup } from '../services/startupWebhookSetup.js';
+import { config } from '../config/environment';
+import { setupWebhookOnStartup } from '../services/startupWebhookSetup';
 
 let initialized = false;
 

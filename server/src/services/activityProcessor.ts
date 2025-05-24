@@ -1,6 +1,6 @@
-import {weatherService, type WeatherData} from './weatherService.js';
-import { stravaApiService } from './stravaApi.js';
-import { prisma } from '../lib/index.js';
+import {weatherService, type WeatherData} from './weatherService';
+import { stravaApiService } from './stravaApi';
+import { prisma } from '../lib';
 
 export interface ProcessingResult {
     success: boolean;

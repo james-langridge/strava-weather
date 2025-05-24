@@ -1,5 +1,5 @@
-import { config } from '../config/environment.js';
-import { webhookSubscriptionService } from './webhookSubscription.js';
+import { config } from '../config/environment';
+import { webhookSubscriptionService } from './webhookSubscription';
 
 /**
  * Automatically setup webhook subscription on app startup

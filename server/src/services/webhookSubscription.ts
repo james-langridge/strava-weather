@@ -1,4 +1,4 @@
-import { config } from '../config/environment.js';
+import { config } from '../config/environment';
 
 export interface WebhookSubscription {
     id: number;

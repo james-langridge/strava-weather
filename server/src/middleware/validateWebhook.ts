@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
-import { config } from '../config/environment.js';
-import { AppError } from '../utils/errors.js';
+import { config } from '../config/environment';
+import { AppError } from '../utils/errors';
 
 /**
  * Middleware to validate Strava webhook signatures

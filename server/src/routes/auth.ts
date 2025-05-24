@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { config } from '../config/environment.js';
-import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser, verifyJWT } from '../services/auth.js';
-import { prisma } from "../lib/index.js";
-import { ensureWebhooksInitialized } from "../utils/initWebhooks.js";
-import { stravaApiService } from '../services/stravaApi.js';
+import { config } from '../config/environment';
+import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser, verifyJWT } from '../services/auth';
+import { prisma } from "../lib";
+import { ensureWebhooksInitialized } from "../utils/initWebhooks";
+import { stravaApiService } from '../services/stravaApi';
 
 const authRouter: Router = Router();
 
@@ -25,7 +25,7 @@ authRouter.get('/strava', (req: Request, res: Response) => {
 
     const authUrl = new URL(config.STRAVA_OAUTH_URL);
     authUrl.searchParams.set('client_id', config.STRAVA_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', `${req.protocol}://${req.get('host')}/api/auth/strava/callback`);
+    authUrl.searchParams.set('redirect_uri', `${config.FRONTEND_URL}/api/auth/strava/callback`);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('approval_prompt', 'force');
     authUrl.searchParams.set('scope', scopes.join(','));

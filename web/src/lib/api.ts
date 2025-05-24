@@ -105,7 +105,7 @@ class ApiClient {
     // Check if user is authenticated (has valid cookie)
     async checkAuth(): Promise<boolean> {
         try {
-            const response = await this.request<{ authenticated: boolean }>('/api/auth/check');
+            const response = await this.request<{ authenticated: boolean }>('/auth/check');
             return response.data?.authenticated || false;
         } catch {
             return false;

@@ -1,5 +1,5 @@
-import { config } from '../src/config/environment.js';
-import { webhookSubscriptionService } from '../src/services/webhookSubscription.js';
+import { config } from '../src/config/environment';
+import { webhookSubscriptionService } from '../src/services/webhookSubscription';
 
 /**
  * Script to set up Strava webhook subscription

@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { config } from '../config/environment.js';
-import { prisma } from "../lib/index.js";
-import { activityProcessor, type ProcessingResult } from '../services/activityProcessor.js';
+import { config } from '../config/environment';
+import { prisma } from "../lib";
+import { activityProcessor, type ProcessingResult } from '../services/activityProcessor';
 
 const stravaRouter = Router();
 

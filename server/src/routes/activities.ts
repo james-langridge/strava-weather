@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { activityProcessor } from '../services/activityProcessor.js';
-import { authenticateUser } from '../services/auth.js';
-import { AppError } from '../middleware/errorHandler.js';
+import { activityProcessor } from '../services/activityProcessor';
+import { authenticateUser } from '../services/auth';
+import { AppError } from '../middleware/errorHandler';
 
 const activitiesRouter = Router();
 

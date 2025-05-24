@@ -1,9 +1,8 @@
 {
-  "name": "api",
+  "name": "server",
   "version": "1.0.0",
   "description": "Express API for Strava Weather Integration",
   "main": "dist/index.js",
-  "type": "module",
   "scripts": {
     "build": "prisma generate && tsc",
     "vercel-build": "prisma generate && prisma migrate deploy && tsc",

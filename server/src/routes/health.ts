@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { config } from '../config/environment.js';
-import { prisma} from "../lib/index.js";
+import { config } from '../config/environment';
+import { prisma} from "../lib";
 import type { Request, Response, NextFunction } from 'express';
 
 const healthRouter = Router();

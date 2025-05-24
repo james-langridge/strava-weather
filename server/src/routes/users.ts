@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/index.js';
-import { authenticateUser, clearAuthCookie } from '../services/auth.js';
-import { AppError } from '../utils/errors.js';
+import { prisma } from '../lib';
+import { authenticateUser, clearAuthCookie } from '../services/auth';
+import { AppError } from '../utils/errors';
 import type { Request, Response, NextFunction } from 'express';
 
 const usersRouter = Router();

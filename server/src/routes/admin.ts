@@ -1,8 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { webhookSubscriptionService } from '../services/webhookSubscription.js';
-import { AppError } from '../middleware/errorHandler.js';
-import { config } from '../config/environment.js';
-import {prisma} from "../lib/index.js";
+import { webhookSubscriptionService } from '../services/webhookSubscription';
+import { AppError } from '../middleware/errorHandler';
+import { config } from '../config/environment';
+import {prisma} from "../lib";
 
 const adminRouter = Router();
 

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { config } from '../config/environment.js';
+import { config } from '../config/environment';
 
 export interface WeatherData {
     temperature: number;        // Temperature in Celsius
