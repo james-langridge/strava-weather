@@ -69,9 +69,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
             setError(null);
 
-            // TEMPORARY DEBUG MODE
-            const DEBUG = true;
-
             console.log('🔍 Checking authentication status...');
             const isAuthenticated = await api.checkAuth();
             console.log('🔐 Authentication check result:', isAuthenticated);
@@ -89,10 +86,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 }
             } else {
                 console.log('❌ Not authenticated');
-                if (DEBUG) {
-                    console.error('DEBUG: Would redirect to OAuth, but skipping for debugging');
-                    return; // Don't redirect in debug mode
-                }
                 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
                 window.location.href = `${apiBase}/api/auth/strava`;
             }
