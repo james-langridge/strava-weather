@@ -15,11 +15,11 @@ import { adminRouter } from '../src/routes/admin.js';
 const app = express();
 
 app.use(cors({
-    origin: config.FRONTEND_URL,
+    origin: process.env.NODE_ENV === 'production' ? false : true,
     credentials: true,
 }));
 app.use(express.json());
-app.use(cookieParser());
+app.use(cookieParser()); // Must be before routes
 app.use(requestLogger);
 
 app.use('/api/health', healthRouter);
@@ -31,34 +31,39 @@ app.use('/api/admin', adminRouter);
 
 app.use(errorHandler);
 
-const port = config.PORT;
-const server = app.listen(port, async () => {
-    console.log(`✅ Server running on http://localhost:${port}`);
-    console.log(`🌍 Environment: ${config.NODE_ENV}`);
-    console.log(`🏥 Health check: http://localhost:${port}/api/health`);
-    console.log(`🔗 Webhook endpoint: http://localhost:${port}/api/strava/webhook`);
-    console.log(`🔐 OAuth flow: http://localhost:${port}/api/auth/strava`);
-    console.log(`👨‍💼 Admin endpoints: http://localhost:${port}/api/admin/webhook/*`);
-});
-
-const gracefulShutdown = async (signal: string) => {
-    console.log(`\n📴 ${signal} received, starting graceful shutdown...`);
-
-    server.close(async () => {
-        console.log('🚪 Server closed');
-
-        // Cleanup webhook if needed (only in dev by default)
-        const { cleanupWebhookOnShutdown } = await import('../src/services/startupWebhookSetup.js');
-        await cleanupWebhookOnShutdown();
-
-        process.exit(0);
+if (process.env.NODE_ENV !== 'production') {
+    const port = config.PORT;
+    const server = app.listen(port, async () => {
+        console.log(`✅ Server running on http://localhost:${port}`);
+        console.log(`🌍 Environment: ${config.NODE_ENV}`);
+        console.log(`🏥 Health check: http://localhost:${port}/api/health`);
+        console.log(`🔗 Webhook endpoint: http://localhost:${port}/api/strava/webhook`);
+        console.log(`🔐 OAuth flow: http://localhost:${port}/api/auth/strava`);
+        console.log(`👨‍💼 Admin endpoints: http://localhost:${port}/api/admin/webhook/*`);
+        console.log(`🍪 Cookie domain: ${config.FRONTEND_URL}`);
     });
 
-    setTimeout(() => {
-        console.error('❌ Forced shutdown after timeout');
-        process.exit(1);
-    }, 10000);
-};
+    const gracefulShutdown = async (signal: string) => {
+        console.log(`\n📴 ${signal} received, starting graceful shutdown...`);
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+        server.close(async () => {
+            console.log('🚪 Server closed');
+
+            // Cleanup webhook if needed (only in dev by default)
+            const { cleanupWebhookOnShutdown } = await import('../src/services/startupWebhookSetup.js');
+            await cleanupWebhookOnShutdown();
+
+            process.exit(0);
+        });
+
+        setTimeout(() => {
+            console.error('❌ Forced shutdown after timeout');
+            process.exit(1);
+        }, 10000);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+}
+
+export default app;

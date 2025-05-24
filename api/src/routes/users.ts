@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/index.js';
-import { authenticateUser } from '../services/auth.js';
+import { authenticateUser, clearAuthCookie } from '../services/auth.js';
 import { AppError } from '../utils/errors.js';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -189,6 +189,9 @@ usersRouter.delete('/me', authenticateUser, async (req: Request, res: Response, 
         });
 
         console.log(`✅ Deleted user account ${user.id}`);
+
+        // Clear the auth cookie since the account no longer exists
+        clearAuthCookie(res);
 
         res.json({
             success: true,

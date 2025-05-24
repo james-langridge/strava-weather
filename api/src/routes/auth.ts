@@ -1,10 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { config } from '../config/environment.js';
-import { generateJWT } from '../services/auth.js';
-import { prisma} from "../lib/index.js";
-import {ensureWebhooksInitialized} from "../utils/initWebhooks.js";
+import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser, verifyJWT } from '../services/auth.js';
+import { prisma } from "../lib/index.js";
+import { ensureWebhooksInitialized } from "../utils/initWebhooks.js";
+import { stravaApiService } from '../services/stravaApi.js';
 
-const authRouter = Router();
+const authRouter: Router = Router();
 
 /**
  * GET /api/auth/strava - Initiate Strava OAuth flow
@@ -121,10 +122,12 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
             await ensureWebhooksInitialized();
 
+            // Generate JWT and set as HTTP-only cookie
             const token = generateJWT(user.id, user.stravaAthleteId);
+            setAuthCookie(res, token);
 
+            // Redirect to success page without token in URL
             const redirectUrl = new URL('/auth/success', config.FRONTEND_URL);
-            redirectUrl.searchParams.set('token', token);
             res.redirect(redirectUrl.toString());
 
         } catch (dbError) {
@@ -134,6 +137,86 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
     } catch (error) {
         console.error('❌ OAuth callback error:', error);
+        next(error);
+    }
+});
+
+/**
+ * POST /api/auth/logout - Logout user
+ */
+authRouter.post('/logout', (req: Request, res: Response) => {
+    console.log('🔒 User logout requested');
+
+    // Clear the auth cookie
+    clearAuthCookie(res);
+
+    res.json({
+        success: true,
+        message: 'Logged out successfully',
+    });
+});
+
+/**
+ * GET /api/auth/check - Check if user is authenticated
+ * This endpoint can be used by the frontend to verify authentication status
+ */
+authRouter.get('/check', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const token = req.cookies?.[config.SESSION_COOKIE_NAME];
+
+        if (!token) {
+            res.json({
+                authenticated: false,
+            });
+            return;
+        }
+
+        // For a more secure check, we should verify the token
+        try {
+            verifyJWT(token);
+            res.json({
+                authenticated: true,
+            });
+        } catch (error) {
+            // Token is invalid or expired
+            res.json({
+                authenticated: false,
+            });
+        }
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * DELETE /api/auth/revoke - Revoke Strava access and logout
+ * This completely disconnects the user's Strava account
+ */
+authRouter.delete('/revoke', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = req.user!;
+
+        console.log(`🔐 Revoking Strava access for user ${user.id}`);
+
+        // Revoke the Strava token
+        await stravaApiService.revokeToken(user.accessToken);
+
+        // Delete the user from our database
+        await prisma.user.delete({
+            where: { id: user.id },
+        });
+
+        console.log(`✅ Revoked access and deleted user ${user.id}`);
+
+        // Clear the auth cookie
+        clearAuthCookie(res);
+
+        res.json({
+            success: true,
+            message: 'Strava access revoked successfully',
+        });
+
+    } catch (error) {
         next(error);
     }
 });

@@ -11,24 +11,13 @@ export function AuthSuccess() {
         // Mark as processed to prevent multiple calls
         hasProcessed.current = true;
 
-        const processToken = async () => {
+        const processAuth = async () => {
             try {
-                // Extract token from URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const token = urlParams.get('token');
+                console.log('🔐 Processing authentication...');
 
-                if (!token) {
-                    console.error('No token found in URL parameters');
-                    setTimeout(() => {
-                        window.location.href = '/auth/error?error=no_token';
-                    }, 2000);
-                    return;
-                }
-
-                console.log('🔑 Processing authentication token...');
-
-                // Login with the token (this will store it and fetch user data)
-                await login(token);
+                // The OAuth callback has already set the HTTP-only cookie
+                // We just need to verify and fetch user data
+                await login();
 
                 console.log('✅ Authentication successful, redirecting to dashboard...');
 
@@ -45,7 +34,7 @@ export function AuthSuccess() {
             }
         };
 
-        processToken();
+        processAuth();
     }, []); // Empty dependency array
 
     // Check if this is a new user

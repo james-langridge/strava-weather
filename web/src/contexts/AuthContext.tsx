@@ -44,20 +44,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setLoading(true);
             setError(null);
 
-            // Only check if we have a token
-            if (!api.isAuthenticated()) {
+            // First check if we have an auth cookie
+            const isAuthenticated = await api.checkAuth();
+
+            if (!isAuthenticated) {
                 setUser(null);
                 return;
             }
 
+            // If authenticated, fetch user data
             const currentUser = await api.getCurrentUser();
             setUser(currentUser);
 
         } catch (error) {
             console.log('Not authenticated:', error);
             setUser(null);
-            // Clear invalid token
-            api.clearToken();
 
         } finally {
             setLoading(false);
@@ -70,23 +71,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
             setError(null);
 
             if (token) {
-                // Token provided (from OAuth callback)
-                console.log('🔐 Logging in with provided token...');
-                api.setToken(token);
+                // This parameter is now deprecated since we use cookies
+                console.warn('Token parameter is deprecated - authentication is handled via cookies');
+            }
 
+            // Check if we're already authenticated (have cookie from OAuth callback)
+            const isAuthenticated = await api.checkAuth();
+
+            if (isAuthenticated) {
                 // Fetch user data
                 const currentUser = await api.getCurrentUser();
                 setUser(currentUser);
                 console.log(`✅ Login successful: ${currentUser.displayName}`);
             } else {
-                // No token provided, redirect to OAuth
+                // No cookie, redirect to OAuth
                 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
                 window.location.href = `${apiBase}/api/auth/strava`;
             }
 
         } catch (error) {
             console.error('❌ Login failed:', error);
-            api.clearToken();
             setUser(null);
             const errorMessage = error instanceof Error ? error.message : 'Login failed';
             setError(errorMessage);
@@ -98,6 +102,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
             setError(null);
 
+            // Call logout endpoint to clear cookie
             await api.logout();
             setUser(null);
 
@@ -135,17 +140,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     const refreshUser = async () => {
-        if (!api.isAuthenticated()) return;
-
         try {
             setError(null);
+
+            // Check if still authenticated
+            const isAuthenticated = await api.checkAuth();
+            if (!isAuthenticated) {
+                setUser(null);
+                return;
+            }
+
             const currentUser = await api.getCurrentUser();
             setUser(currentUser);
         } catch (error) {
             console.log('Failed to refresh user:', error);
             // If refresh fails, the user might be logged out
             setUser(null);
-            api.clearToken();
         }
     };
 

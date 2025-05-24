@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
-import {config} from '../config/environment.js';
-import {prisma} from "../lib/index.js";
-import type {NextFunction, Request, Response} from 'express';
+import { config } from '../config/environment.js';
+import { prisma } from "../lib/index.js";
+import type { NextFunction, Request, Response } from 'express';
 
 export interface JwtPayload {
     userId: string;
@@ -49,7 +49,6 @@ export function generateJWT(userId: string, stravaAthleteId: string | number | b
     });
 }
 
-
 /**
  * Verify and decode JWT token
  */
@@ -74,22 +73,98 @@ export function verifyJWT(token: string): JwtPayload {
 }
 
 /**
- * Extract token from request headers
+ * Extract token from request
+ * Prioritizes cookies over Authorization header for security
  */
 function extractTokenFromRequest(req: Request): string | null {
-    const authHeader = req.headers.authorization;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        return authHeader.substring(7);
-    }
-
-    // Also check for token in cookies (for browser requests)
+    // First check for HTTP-only cookie (most secure)
     const cookieToken = req.cookies?.[config.SESSION_COOKIE_NAME];
     if (cookieToken) {
         return cookieToken;
     }
 
+    // Fallback to Authorization header (for backward compatibility)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7);
+    }
+
     return null;
+}
+
+/**
+ * Set secure HTTP-only cookie with JWT
+ */
+export function setAuthCookie(res: Response, token: string): void {
+    // Extract domain from FRONTEND_URL for cookie domain
+    // For example: https://web.example.com -> .example.com
+    let cookieDomain: string | undefined;
+
+    try {
+        const frontendUrl = new URL(config.FRONTEND_URL);
+        const hostname = frontendUrl.hostname;
+
+        // If it's a subdomain, set cookie for parent domain
+        // This allows cookie sharing between api.example.com and web.example.com
+        const parts = hostname.split('.');
+        if (parts.length > 2) {
+            // Remove subdomain, keep domain.tld
+            cookieDomain = '.' + parts.slice(-2).join('.');
+        } else if (parts.length === 2 && !hostname.includes('localhost')) {
+            // For example.com, set .example.com
+            cookieDomain = '.' + hostname;
+        }
+        // For localhost or IP addresses, don't set domain
+    } catch (error) {
+        console.warn('Could not parse FRONTEND_URL for cookie domain:', error);
+    }
+
+    const cookieOptions = {
+        httpOnly: true, // Prevents JavaScript access (XSS protection)
+        secure: config.isProduction, // HTTPS only in production
+        sameSite: 'lax' as const, // CSRF protection
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
+        path: '/', // Cookie available for all paths
+    };
+
+    res.cookie(config.SESSION_COOKIE_NAME, token, cookieOptions);
+
+    console.log(`🍪 Set auth cookie with options:`, {
+        ...cookieOptions,
+        token: token.substring(0, 10) + '...' // Log partial token for debugging
+    });
+}
+
+/**
+ * Clear auth cookie
+ */
+export function clearAuthCookie(res: Response): void {
+    // Extract domain same as setAuthCookie for consistency
+    let cookieDomain: string | undefined;
+
+    try {
+        const frontendUrl = new URL(config.FRONTEND_URL);
+        const hostname = frontendUrl.hostname;
+        const parts = hostname.split('.');
+
+        if (parts.length > 2) {
+            cookieDomain = '.' + parts.slice(-2).join('.');
+        } else if (parts.length === 2 && !hostname.includes('localhost')) {
+            cookieDomain = '.' + hostname;
+        }
+    } catch (error) {
+        console.warn('Could not parse FRONTEND_URL for cookie domain:', error);
+    }
+
+    res.clearCookie(config.SESSION_COOKIE_NAME, {
+        httpOnly: true,
+        secure: config.isProduction,
+        sameSite: 'lax',
+        path: '/',
+        ...(cookieDomain && { domain: cookieDomain }),
+    });
+
+    console.log('🗑️ Cleared auth cookie');
 }
 
 /**

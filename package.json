@@ -19,6 +19,7 @@
   "private": true,
   "workspaces": ["api", "web"],
   "scripts": {
+    "build:all": "npm run build:api && npm run build:web",
     "dev": "concurrently \"npm run dev -w api\" \"npm run dev -w web\"",
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run dev -w api",

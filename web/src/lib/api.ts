@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.PROD
+    ? '/api'
+    : import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface ApiResponse<T = any> {
     success: boolean;
@@ -32,19 +34,6 @@ class ApiClient {
         this.baseUrl = baseUrl;
     }
 
-    private getAuthHeaders(): HeadersInit {
-        const token = localStorage.getItem('authToken');
-        const headers: HeadersInit = {
-            'Content-Type': 'application/json',
-        };
-
-        if (token) {
-            headers.Authorization = `Bearer ${token}`;
-        }
-
-        return headers;
-    }
-
     private async request<T>(
         endpoint: string,
         options: RequestInit = {}
@@ -57,10 +46,11 @@ class ApiClient {
         const config: RequestInit = {
             ...options,
             headers: {
-                ...this.getAuthHeaders(),
+                'Content-Type': 'application/json',
                 ...options.headers,
             },
-            // Remove credentials: 'include' since we're using Authorization headers now
+            // Include cookies with every request
+            credentials: 'include',
         };
 
         try {
@@ -71,9 +61,11 @@ class ApiClient {
             if (!response.ok) {
                 if (response.status === 401) {
                     console.log(`🔒 [${requestId}] Authentication required for ${endpoint}`);
-                    // Clear invalid token and redirect to login
-                    localStorage.removeItem('authToken');
-                    window.location.href = '/';
+                    // For 401s, check if we should redirect to login
+                    // Don't redirect for auth check endpoint
+                    if (!endpoint.includes('/auth/check')) {
+                        window.location.href = '/';
+                    }
                     throw new Error('Authentication required');
                 }
 
@@ -103,14 +95,21 @@ class ApiClient {
     }
 
     async logout(): Promise<void> {
-        // Clear token locally (no need to call backend for token-based auth)
-        localStorage.removeItem('authToken');
+        await this.request('/api/auth/logout', { method: 'POST' });
     }
 
     async revokeAccess(): Promise<void> {
         await this.request('/api/auth/revoke', { method: 'DELETE' });
-        // Clear token after successful revocation
-        localStorage.removeItem('authToken');
+    }
+
+    // Check if user is authenticated (has valid cookie)
+    async checkAuth(): Promise<boolean> {
+        try {
+            const response = await this.request<{ authenticated: boolean }>('/api/auth/check');
+            return response.data?.authenticated || false;
+        } catch {
+            return false;
+        }
     }
 
     // User management
@@ -124,31 +123,12 @@ class ApiClient {
 
     async deleteAccount(): Promise<void> {
         await this.request('/api/users/me', { method: 'DELETE' });
-        // Clear token after account deletion
-        localStorage.removeItem('authToken');
     }
 
     // Health check
     async getHealth(): Promise<{ status: string; timestamp: string; environment: string }> {
         const response = await this.request<{ status: string; timestamp: string; environment: string }>('/api/health');
         return response.data!;
-    }
-
-    // Token management methods
-    setToken(token: string): void {
-        localStorage.setItem('authToken', token);
-    }
-
-    getToken(): string | null {
-        return localStorage.getItem('authToken');
-    }
-
-    clearToken(): void {
-        localStorage.removeItem('authToken');
-    }
-
-    isAuthenticated(): boolean {
-        return !!this.getToken();
     }
 }
 
