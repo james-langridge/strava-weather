@@ -1,16 +1,17 @@
 {
-  "buildCommand": "npm run build:all",
+  "buildCommand": "npm run build:api && npm run build:web",
   "outputDirectory": "web/dist",
+  "installCommand": "npm install",
   "functions": {
-    "api/index.js": {
+    "api.js": {
       "maxDuration": 10,
-      "includeFiles": "api/**"
+      "includeFiles": "api/dist/**"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api"
+      "destination": "/api.js"
     },
     {
       "source": "/(.*)",

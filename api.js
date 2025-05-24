@@ -1,0 +1,1 @@
+module.exports = require('./api/dist/api/index.js');
