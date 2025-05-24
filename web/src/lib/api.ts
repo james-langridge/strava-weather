@@ -106,8 +106,20 @@ class ApiClient {
     async checkAuth(): Promise<boolean> {
         try {
             const response = await this.request<{ authenticated: boolean }>('/auth/check');
-            return response.data?.authenticated || false;
-        } catch {
+            console.log('checkAuth response:', response);
+            console.log('response type:', typeof response);
+            console.log('response keys:', Object.keys(response));
+            console.log('response.data:', response.data);
+            console.log('response.data?.authenticated:', response.data?.authenticated);
+
+            // Try both ways to see which one works
+            const dataCheck = response.data?.authenticated === true;
+
+            console.log('dataCheck:', dataCheck);
+
+            return dataCheck;
+        } catch (error) {
+            console.error('checkAuth error:', error);
             return false;
         }
     }

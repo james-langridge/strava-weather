@@ -65,29 +65,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
     };
 
-    const login = async (token?: string) => {
+    const login = async () => {
         try {
             setError(null);
 
-            if (token) {
-                // This parameter is now deprecated since we use cookies
-                console.warn('Token parameter is deprecated - authentication is handled via cookies');
-            }
+            // TEMPORARY DEBUG MODE
+            const DEBUG = true;
 
             console.log('🔍 Checking authentication status...');
-            // Check if we're already authenticated (have cookie from OAuth callback)
             const isAuthenticated = await api.checkAuth();
             console.log('🔐 Authentication check result:', isAuthenticated);
 
             if (isAuthenticated) {
-                // Fetch user data
                 console.log('✅ User is authenticated, fetching user data...');
-                const currentUser = await api.getCurrentUser();
-                setUser(currentUser);
-                console.log(`✅ Login successful: ${currentUser.displayName}`);
+                try {
+                    const currentUser = await api.getCurrentUser();
+                    console.log('👤 User data fetched:', currentUser);
+                    setUser(currentUser);
+                    console.log('✅ Login successful:', currentUser.displayName);
+                } catch (userError) {
+                    console.error('❌ Failed to fetch user data:', userError);
+                    throw userError;
+                }
             } else {
-                // No cookie, redirect to OAuth
-                console.log('❌ Not authenticated, redirecting to OAuth...');
+                console.log('❌ Not authenticated');
+                if (DEBUG) {
+                    console.error('DEBUG: Would redirect to OAuth, but skipping for debugging');
+                    return; // Don't redirect in debug mode
+                }
                 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
                 window.location.href = `${apiBase}/api/auth/strava`;
             }
