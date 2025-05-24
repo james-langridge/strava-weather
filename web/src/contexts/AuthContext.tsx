@@ -110,17 +110,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
             setError(null);
 
-            // Call logout endpoint to clear cookie
-            await api.logout();
+            // First, clear the user state immediately
             setUser(null);
 
-            // Redirect to home page
-            window.location.href = '/';
+            // Then call logout endpoint to clear cookie
+            await api.logout();
+
+            // Force a hard refresh to clear any cached state
+            window.location.replace('/');  // Use replace instead of href
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Logout failed';
             setError(errorMessage);
-            throw error;
+            // Even if logout fails, clear user and redirect
+            setUser(null);
+            window.location.replace('/');
         }
     };
 

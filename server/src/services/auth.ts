@@ -114,29 +114,12 @@ export function setAuthCookie(res: Response, token: string): void {
  * Clear auth cookie
  */
 export function clearAuthCookie(res: Response): void {
-    // Extract domain same as setAuthCookie for consistency
-    let cookieDomain: string | undefined;
-
-    try {
-        const frontendUrl = new URL(config.FRONTEND_URL);
-        const hostname = frontendUrl.hostname;
-        const parts = hostname.split('.');
-
-        if (parts.length > 2) {
-            cookieDomain = '.' + parts.slice(-2).join('.');
-        } else if (parts.length === 2 && !hostname.includes('localhost')) {
-            cookieDomain = '.' + hostname;
-        }
-    } catch (error) {
-        console.warn('Could not parse FRONTEND_URL for cookie domain:', error);
-    }
-
     res.clearCookie(config.SESSION_COOKIE_NAME, {
         httpOnly: true,
-        secure: config.isProduction,
+        secure: true,  // Must match what was set
         sameSite: 'lax',
         path: '/',
-        ...(cookieDomain && { domain: cookieDomain }),
+        // Don't set domain - let browser handle it
     });
 
     console.log('🗑️ Cleared auth cookie');

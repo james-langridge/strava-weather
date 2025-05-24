@@ -152,7 +152,9 @@ authRouter.post('/logout', (req: Request, res: Response) => {
 
     res.json({
         success: true,
-        message: 'Logged out successfully',
+        data: {
+            message: 'Logged out successfully',
+        }
     });
 });
 
