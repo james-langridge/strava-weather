@@ -1,8 +1,11 @@
-import {weatherService, type WeatherData} from './weatherService';
+import { weatherService, type WeatherData } from './weatherService';
 import { stravaApiService } from './stravaApi';
 import { prisma } from '../lib';
-import {createServiceLogger} from "../utils/logger";
+import { createServiceLogger } from '../utils/logger';
 
+/**
+ * Activity processing result interface
+ */
 export interface ProcessingResult {
     success: boolean;
     activityId: string;
@@ -12,6 +15,9 @@ export interface ProcessingResult {
     reason?: string;
 }
 
+/**
+ * Strava activity data interface
+ */
 export interface ActivityData {
     id: string | number;
     name: string;
@@ -30,47 +36,56 @@ export interface ActivityData {
 const logger = createServiceLogger('ActivityProcessor');
 
 /**
- * Service for processing Strava activities and adding weather data
+ * Weather data patterns for detection
+ */
+const WEATHER_PATTERNS = [
+    /°C/,
+    /°F/,
+    /Feels like/,
+    /Humidity/,
+    /m\/s from/,
+    /🌤️ Weather:/,
+    /Weather:/,
+];
+
+/**
+ * Wind direction compass points
+ */
+const WIND_DIRECTIONS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'] as const;
+
+/**
+ * Activity processor service
+ *
+ * Handles the processing of Strava activities to enrich them with weather data.
+ * Manages token refresh, activity retrieval, weather fetching, and description updates.
  */
 export class ActivityProcessor {
-
-    /**
-     * Check if activity already has weather data by examining description
-     */
-    private hasWeatherData(description?: string): boolean {
-        if (!description) return false;
-
-        return description.includes('°C') ||
-            description.includes('Feels like') ||
-            description.includes('Humidity') ||
-            description.includes('m/s from') ||
-            description.includes('🌤️ Weather:') ||
-            description.includes('Weather:') ||
-            description.includes('°F');
-    }
-
     /**
      * Process a single activity and add weather data
+     *
+     * @param activityId - Strava activity ID to process
+     * @param userId - Internal user ID for token access
+     * @param forceUpdate - Force update even if weather data exists
+     * @returns Processing result with success status and any weather data
      */
     async processActivity(
         activityId: string,
         userId: string,
         forceUpdate: boolean = false
     ): Promise<ProcessingResult> {
-        const startTime: number = Date.now();
-        const log = (step: string, data?: any): void => {
-            console.log(`[${Date.now() - startTime}ms] ${step}`, data || '');
+        const startTime = Date.now();
+        const logContext = {
+            activityId,
+            userId,
+            forceUpdate,
         };
 
-        try {
-            logger.info('Processing activity', {
-                activityId,
-                userId,
-                forceUpdate
-            });
+        logger.info('Starting activity processing', logContext);
 
-            // Get user's Strava tokens (encrypted)
-            log('📊 Fetching user from database...');
+        try {
+            // Fetch user with encrypted tokens
+            logger.debug('Fetching user from database', logContext);
+
             const user = await prisma.user.findUnique({
                 where: { id: userId },
                 select: {
@@ -84,14 +99,23 @@ export class ActivityProcessor {
             });
 
             if (!user) {
-                log('❌ User not found');
-                throw new Error('User not found');
+                logger.error('User not found', logContext);
+                return {
+                    success: false,
+                    activityId,
+                    error: 'User not found',
+                };
             }
 
-            log(`✅ User found: ${user.firstName} ${user.lastName}`);
+            logger.debug('User retrieved', {
+                ...logContext,
+                userName: `${user.firstName} ${user.lastName}`,
+                weatherEnabled: user.weatherEnabled,
+            });
 
+            // Check if weather updates are enabled
             if (!user.weatherEnabled) {
-                log('⚠️ Weather updates disabled');
+                logger.info('Weather updates disabled for user', logContext);
                 return {
                     success: false,
                     activityId,
@@ -100,18 +124,24 @@ export class ActivityProcessor {
                 };
             }
 
-            // Check if token needs refresh (tokens are encrypted)
-            log('🔑 Checking token validity...');
+            // Ensure valid Strava token
+            logger.debug('Validating Strava access token', logContext);
+
             const tokenData = await stravaApiService.ensureValidToken(
                 user.accessToken,  // Encrypted
                 user.refreshToken, // Encrypted
                 user.tokenExpiresAt
             );
-            log(`✅ Token ${tokenData.wasRefreshed ? 'was refreshed' : 'is valid'}`);
 
-            // Update tokens if refreshed (store encrypted)
+            logger.debug('Token validation complete', {
+                ...logContext,
+                wasRefreshed: tokenData.wasRefreshed,
+            });
+
+            // Update tokens if refreshed
             if (tokenData.wasRefreshed) {
-                log('💾 Saving refreshed tokens...');
+                logger.info('Updating refreshed tokens', logContext);
+
                 await prisma.user.update({
                     where: { id: userId },
                     data: {
@@ -121,22 +151,35 @@ export class ActivityProcessor {
                         updatedAt: new Date(),
                     },
                 });
-                log('✅ Tokens updated in database');
+
+                logger.debug('Tokens updated in database', logContext);
             }
 
-            // Get activity from Strava (pass encrypted token)
-            log(`🏃 Fetching activity ${activityId} from Strava...`);
+            // Retrieve activity from Strava
+            logger.debug('Fetching activity from Strava', logContext);
+
             const activity = await stravaApiService.getActivity(activityId, tokenData.accessToken);
-            log(`✅ Activity retrieved: "${activity.name}" (${activity.type})`);
 
             if (!activity) {
-                log('❌ Activity not found on Strava');
-                throw new Error('Activity not found on Strava');
+                logger.warn('Activity not found on Strava', logContext);
+                return {
+                    success: false,
+                    activityId,
+                    error: 'Activity not found on Strava',
+                };
             }
 
-            // Check if already has weather
+            logger.info('Activity retrieved', {
+                ...logContext,
+                activityName: activity.name,
+                activityType: activity.type,
+                hasDescription: !!activity.description,
+                hasCoordinates: !!activity.start_latlng,
+            });
+
+            // Check if activity already has weather data
             if (!forceUpdate && this.hasWeatherData(activity.description)) {
-                log('⏭️ Activity already has weather data');
+                logger.info('Activity already contains weather data', logContext);
                 return {
                     success: true,
                     activityId,
@@ -145,9 +188,9 @@ export class ActivityProcessor {
                 };
             }
 
-            // Check GPS coordinates
+            // Validate GPS coordinates
             if (!activity.start_latlng || activity.start_latlng.length !== 2) {
-                log('📍 No GPS coordinates found');
+                logger.info('Activity missing GPS coordinates', logContext);
                 return {
                     success: false,
                     activityId,
@@ -158,27 +201,61 @@ export class ActivityProcessor {
 
             const [lat, lon] = activity.start_latlng;
             const activityStartTime = new Date(activity.start_date);
-            log(`📍 GPS: ${lat}, ${lon} at ${activityStartTime.toISOString()}`);
 
-            // Get weather data
-            log('🌤️ Fetching weather data...');
-            const weatherData = await weatherService.getWeatherForActivity(lat, lon, activityStartTime, activityId);
-            log(`✅ Weather: ${weatherData.temperature}°F, ${weatherData.description}`);
+            logger.debug('Activity location data', {
+                ...logContext,
+                latitude: lat,
+                longitude: lon,
+                startTime: activityStartTime.toISOString(),
+            });
+
+            // Fetch weather data
+            logger.debug('Fetching weather data', {
+                ...logContext,
+                coordinates: { lat, lon },
+            });
+
+            const weatherData = await weatherService.getWeatherForActivity(
+                lat,
+                lon,
+                activityStartTime,
+                activityId
+            );
+
+            logger.info('Weather data retrieved', {
+                ...logContext,
+                temperature: weatherData.temperature,
+                description: weatherData.description,
+                humidity: weatherData.humidity,
+                windSpeed: weatherData.windSpeed,
+            });
 
             // Create updated description
-            log('📝 Creating weather description...');
             const updatedDescription = this.createWeatherDescription(activity, weatherData);
-            log(`✅ Description created (${updatedDescription.length} chars)`);
 
-            // Update activity on Strava (pass encrypted token)
-            log('📤 Updating activity on Strava...');
+            logger.debug('Weather description created', {
+                ...logContext,
+                descriptionLength: updatedDescription.length,
+                originalLength: activity.description?.length || 0,
+            });
+
+            // Update activity on Strava
+            logger.debug('Updating activity on Strava', logContext);
+
             await stravaApiService.updateActivity(activityId, tokenData.accessToken, {
                 description: updatedDescription,
             });
-            log('✅ Activity updated successfully!');
 
-            const totalTime: number = Date.now() - startTime;
-            log(`✅ COMPLETE in ${totalTime}ms`);
+            const processingTime = Date.now() - startTime;
+
+            logger.info('Activity processing completed successfully', {
+                ...logContext,
+                processingTimeMs: processingTime,
+                weatherData: {
+                    temperature: weatherData.temperature,
+                    description: weatherData.description,
+                },
+            });
 
             return {
                 success: true,
@@ -187,13 +264,13 @@ export class ActivityProcessor {
             };
 
         } catch (error) {
-            const totalTime: number = Date.now() - startTime;
+            const processingTime = Date.now() - startTime;
+
             logger.error('Activity processing failed', {
-                activityId,
-                userId,
-                duration: totalTime,
+                ...logContext,
+                processingTimeMs: processingTime,
                 error: error instanceof Error ? error.message : 'Unknown error',
-                stack: error instanceof Error ? error.stack : undefined
+                stack: error instanceof Error ? error.stack : undefined,
             });
 
             return {
@@ -205,42 +282,101 @@ export class ActivityProcessor {
     }
 
     /**
+     * Check if activity description already contains weather data
+     *
+     * @param description - Activity description to check
+     * @returns True if weather data is detected
+     */
+    private hasWeatherData(description?: string): boolean {
+        if (!description) return false;
+
+        return WEATHER_PATTERNS.some(pattern => pattern.test(description));
+    }
+
+    /**
      * Create weather-enhanced description for activity
+     *
+     * @param activity - Original activity data
+     * @param weatherData - Weather data to append
+     * @returns Updated description with weather information
      */
     private createWeatherDescription(activity: ActivityData, weatherData: WeatherData): string {
         const originalDescription = activity.description || '';
 
-        const cleanDescription = originalDescription
-            .replace(/\n*[A-Z][^,]+, -?\d+°C, Feels like.*from [NSEW]+[NSEW]*/g, '')
+        // Remove existing weather data using regex patterns
+        const cleanDescription = this.removeExistingWeatherData(originalDescription);
+
+        // Format weather conditions
+        const condition = this.capitalizeFirst(weatherData.description);
+
+        // Build weather line
+        const weatherLine = this.formatWeatherLine(condition, weatherData);
+
+        // Combine descriptions
+        if (cleanDescription) {
+            return `${cleanDescription}\n\n${weatherLine}`;
+        }
+
+        return weatherLine;
+    }
+
+    /**
+     * Remove existing weather data from description
+     *
+     * @param description - Original description
+     * @returns Cleaned description without weather data
+     */
+    private removeExistingWeatherData(description: string): string {
+        return description
+            // Remove standard weather format
+            .replace(/\n*[A-Z][^,]+, -?\d+°[CF], Feels like.*from [NSEW]+[NSEW]*/g, '')
+            // Remove emoji weather format
             .replace(/\n*🌤️ Weather:[\s\S]*$/, '')
+            // Clean up multiple line breaks
             .replace(/\n\n+/g, '\n')
             .trim();
+    }
 
-        const condition = weatherData.description.charAt(0).toUpperCase() + weatherData.description.slice(1);
-
-        const weatherLine = [
+    /**
+     * Format weather data into a single line
+     *
+     * @param condition - Weather condition description
+     * @param weatherData - Weather data object
+     * @returns Formatted weather line
+     */
+    private formatWeatherLine(condition: string, weatherData: WeatherData): string {
+        const parts = [
             condition,
             `${weatherData.temperature}°C`,
             `Feels like ${weatherData.temperatureFeel}°C`,
             `Humidity ${weatherData.humidity}%`,
-            `Wind ${weatherData.windSpeed}m/s from ${this.getWindDirectionString(weatherData.windDirection)}`
-        ].join(', ');
+            `Wind ${weatherData.windSpeed}m/s from ${this.getWindDirectionString(weatherData.windDirection)}`,
+        ];
 
-        if (cleanDescription) {
-            return `${cleanDescription}\n\n${weatherLine}`;
-        } else {
-            return weatherLine;
-        }
+        return parts.join(', ');
     }
 
     /**
      * Convert wind direction degrees to compass direction
+     *
+     * @param degrees - Wind direction in degrees (0-360)
+     * @returns Compass direction string (e.g., "NE", "SW")
      */
     private getWindDirectionString(degrees: number): string {
-        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         const index = Math.round(degrees / 22.5) % 16;
-        return directions[index] || 'N';
+        return WIND_DIRECTIONS[index] || 'N';
+    }
+
+    /**
+     * Capitalize first letter of string
+     *
+     * @param str - String to capitalize
+     * @returns Capitalized string
+     */
+    private capitalizeFirst(str: string): string {
+        return str.charAt(0).toUpperCase() + str.slice(1);
     }
 }
 
+// Export singleton instance
 export const activityProcessor = new ActivityProcessor();
