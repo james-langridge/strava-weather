@@ -21,11 +21,7 @@
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,tsx,json}\" \"prisma/**/*.prisma\"",
-    "webhook:status": "tsx scripts/setupWebhooks.ts status",
-    "webhook:setup": "tsx scripts/setupWebhooks.ts setup",
-    "webhook:delete": "tsx scripts/setupWebhooks.ts delete",
-    "webhook:help": "tsx scripts/setupWebhooks.ts help"
+    "format": "prettier --write \"src/**/*.{ts,tsx,json}\" \"prisma/**/*.prisma\""
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",
