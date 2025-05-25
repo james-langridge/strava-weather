@@ -1,184 +1,285 @@
 import { config } from '../src/config/environment';
 import { webhookSubscriptionService } from '../src/services/webhookSubscription';
+import { logger } from '../src/utils/logger';
 
 /**
- * Script to set up Strava webhook subscription
+ * Strava webhook subscription management CLI
  *
- * Usage:
- * - npm run webhook:setup
- * - npm run webhook:setup -- --url https://your-domain.com
- * - npm run webhook:delete
- * - npm run webhook:status
+ * Manages the lifecycle of Strava webhook subscriptions including
+ * creation, deletion, and status checking. Handles both development
+ * (with ngrok) and production environments.
+ *
+ * @example
+ * npm run webhook:status
+ * npm run webhook:setup -- --url https://your-domain.com
+ * npm run webhook:delete
  */
 
-async function main() {
-    const args = process.argv.slice(2);
-    const command = args[0] || 'status';
+interface CliCommand {
+    name: string;
+    aliases: string[];
+    handler: (args: string[]) => Promise<void>;
+    description: string;
+}
 
-    console.log('🚀 Strava Webhook Setup Script');
-    console.log('==============================\n');
+const commands: CliCommand[] = [
+    {
+        name: 'status',
+        aliases: ['--status', '-s'],
+        handler: checkStatus,
+        description: 'Check webhook subscription status',
+    },
+    {
+        name: 'setup',
+        aliases: ['--setup', 'create', '--create'],
+        handler: setupWebhook,
+        description: 'Create webhook subscription',
+    },
+    {
+        name: 'delete',
+        aliases: ['--delete', 'remove', '--remove'],
+        handler: deleteWebhook,
+        description: 'Delete webhook subscription',
+    },
+    {
+        name: 'help',
+        aliases: ['--help', '-h'],
+        handler: async () => showHelp(),
+        description: 'Show help message',
+    },
+];
+
+/**
+ * Main CLI entry point
+ */
+async function main(): Promise<void> {
+    const args = process.argv.slice(2);
+    const commandName = args[0] || 'status';
+
+    logHeader();
 
     try {
-        switch (command) {
-            case 'status':
-            case '--status':
-                await checkStatus();
-                break;
+        const command = findCommand(commandName);
 
-            case 'setup':
-            case '--setup':
-                const urlIndex = args.findIndex(arg => arg === '--url' || arg === '-u');
-                const customUrl = urlIndex !== -1 ? args[urlIndex + 1] : null;
-                await setupWebhook(customUrl);
-                break;
-
-            case 'delete':
-            case '--delete':
-                await deleteWebhook();
-                break;
-
-            case 'help':
-            case '--help':
-            case '-h':
-                showHelp();
-                break;
-
-            default:
-                console.error(`❌ Unknown command: ${command}\n`);
-                showHelp();
-                process.exit(1);
+        if (!command) {
+            logger.error('Unknown command', { command: commandName });
+            showHelp();
+            process.exit(1);
         }
 
+        await command.handler(args);
+        process.exit(0);
     } catch (error) {
-        console.error('\n❌ Error:', error instanceof Error ? error.message : error);
+        logger.error('Script execution failed', error);
         process.exit(1);
     }
 }
 
-async function checkStatus() {
-    console.log('📍 Checking webhook subscription status...\n');
+/**
+ * Find command by name or alias
+ */
+function findCommand(name: string): CliCommand | undefined {
+    return commands.find(
+        cmd => cmd.name === name || cmd.aliases.includes(name)
+    );
+}
 
-    const subscription = await webhookSubscriptionService.viewSubscription();
+/**
+ * Display script header
+ */
+function logHeader(): void {
+    console.log('Strava Webhook Setup Script');
+    console.log('===========================\n');
+}
 
-    if (subscription) {
-        console.log('✅ Active webhook subscription found:');
-        console.log(`   ID: ${subscription.id}`);
-        console.log(`   Callback URL: ${subscription.callback_url}`);
-        console.log(`   Created: ${subscription.created_at}`);
-        console.log(`   Updated: ${subscription.updated_at}`);
-    } else {
-        console.log('❌ No webhook subscription found');
-        console.log('\nTo create a subscription, run:');
-        console.log('   npm run webhook:setup');
-        console.log('   npm run webhook:setup -- --url https://your-domain.com');
+/**
+ * Check current webhook subscription status
+ */
+async function checkStatus(): Promise<void> {
+    logger.info('Checking webhook subscription status');
+
+    try {
+        const subscription = await webhookSubscriptionService.viewSubscription();
+
+        if (subscription) {
+            logger.info('Active webhook subscription found', {
+                id: subscription.id,
+                callbackUrl: subscription.callback_url,
+                createdAt: subscription.created_at,
+                updatedAt: subscription.updated_at,
+            });
+        } else {
+            logger.warn('No webhook subscription found');
+            console.log('\nTo create a subscription:');
+            console.log('  npm run webhook:setup');
+            console.log('  npm run webhook:setup -- --url https://your-domain.com');
+        }
+    } catch (error) {
+        logger.error('Failed to check webhook status', error);
+        throw error;
     }
 }
 
-async function setupWebhook(customUrl: string | null | undefined) {
-    console.log('📍 Setting up webhook subscription...\n');
+/**
+ * Create new webhook subscription
+ */
+async function setupWebhook(args: string[]): Promise<void> {
+    logger.info('Setting up webhook subscription');
 
     // Check for existing subscription
     const existing = await webhookSubscriptionService.viewSubscription();
     if (existing) {
-        console.log('⚠️  Existing subscription found:');
-        console.log(`   ID: ${existing.id}`);
-        console.log(`   Callback URL: ${existing.callback_url}`);
-        console.log('\nTo delete it and create a new one, run:');
-        console.log('   npm run webhook:delete');
+        logger.warn('Existing subscription found', {
+            id: existing.id,
+            callbackUrl: existing.callback_url,
+        });
+        console.log('\nTo replace it:');
+        console.log('  1. Delete existing: npm run webhook:delete');
+        console.log('  2. Create new: npm run webhook:setup');
         return;
     }
 
     // Determine callback URL
-    let callbackUrl: string;
+    const callbackUrl = await resolveCallbackUrl(args);
+    logger.info('Using callback URL', { callbackUrl });
 
-    if (customUrl) {
-        // Use provided custom URL
-        callbackUrl = `${customUrl}/api/strava/webhook`;
-    } else if (config.isDevelopment) {
-        // In development, check for ngrok URL
-        const ngrokUrl = process.env.NGROK_URL;
-        if (!ngrokUrl) {
-            console.error('❌ In development, you need to provide a public URL\n');
-            console.log('Option 1: Use ngrok');
-            console.log('   1. Install ngrok: https://ngrok.com');
-            console.log('   2. Run: ngrok http 3001');
-            console.log('   3. Run: npm run webhook:setup -- --url https://your-subdomain.ngrok.io');
-            console.log('\nOption 2: Set NGROK_URL in .env');
-            console.log('   1. Add to .env: NGROK_URL=https://your-subdomain.ngrok.io');
-            console.log('   2. Run: npm run webhook:setup');
-            process.exit(1);
-        }
-        callbackUrl = `${ngrokUrl}/api/strava/webhook`;
-    } else {
-        // In production, use APP_URL
-        callbackUrl = `${config.APP_URL}/api/strava/webhook`;
-    }
-
-    console.log(`📍 Callback URL: ${callbackUrl}\n`);
-
-    // Verify endpoint is accessible
-    console.log('🔍 Verifying webhook endpoint...');
+    // Verify endpoint accessibility
+    logger.info('Verifying webhook endpoint accessibility');
     const isAccessible = await webhookSubscriptionService.verifyEndpoint(callbackUrl);
 
     if (!isAccessible) {
-        console.error('\n❌ Webhook endpoint is not accessible!');
-        console.error('   Make sure your server is running and publicly accessible.');
-        console.error('\nFor local development:');
-        console.error('   1. Make sure the Express server is running (npm run dev:server)');
-        console.error('   2. Make sure ngrok is pointing to the correct port (3001)');
-        process.exit(1);
+        logger.error('Webhook endpoint is not accessible', { callbackUrl });
+        console.error('\nTroubleshooting:');
+        console.error('  - Ensure your server is running');
+        console.error('  - Check the URL is publicly accessible');
+        console.error('  - Verify firewall/security group settings');
+
+        if (config.isDevelopment) {
+            console.error('\nFor local development:');
+            console.error('  - Start server: npm run dev:server');
+            console.error('  - Start ngrok: ngrok http 3001');
+            console.error('  - Update NGROK_URL in .env');
+        }
+
+        throw new Error('Webhook endpoint verification failed');
     }
 
-    console.log('✅ Webhook endpoint verified\n');
+    logger.info('Webhook endpoint verified');
 
     // Create subscription
-    console.log('📝 Creating webhook subscription...');
-    const subscription = await webhookSubscriptionService.createSubscription(callbackUrl);
+    try {
+        const subscription = await webhookSubscriptionService.createSubscription(callbackUrl);
 
-    console.log('\n✅ Webhook subscription created successfully!');
-    console.log(`   ID: ${subscription.id}`);
-    console.log(`   Callback URL: ${subscription.callback_url}`);
-    console.log('\n🎉 Your app will now receive activity events from Strava!');
+        logger.info('Webhook subscription created successfully', {
+            id: subscription.id,
+            callbackUrl: subscription.callback_url,
+        });
+
+        console.log('\nYour app will now receive Strava activity events.');
+    } catch (error) {
+        logger.error('Failed to create webhook subscription', error);
+        throw error;
+    }
 }
 
-async function deleteWebhook() {
-    console.log('🗑️  Deleting webhook subscription...\n');
+/**
+ * Delete existing webhook subscription
+ */
+async function deleteWebhook(): Promise<void> {
+    logger.info('Deleting webhook subscription');
 
     const subscription = await webhookSubscriptionService.viewSubscription();
 
     if (!subscription) {
-        console.log('❌ No webhook subscription found to delete');
+        logger.warn('No webhook subscription found to delete');
         return;
     }
 
-    console.log(`📍 Found subscription ID: ${subscription.id}`);
-    console.log(`   Callback URL: ${subscription.callback_url}\n`);
+    logger.info('Found subscription to delete', {
+        id: subscription.id,
+        callbackUrl: subscription.callback_url,
+    });
 
-    await webhookSubscriptionService.deleteSubscription(subscription.id);
-
-    console.log('✅ Webhook subscription deleted successfully');
+    try {
+        await webhookSubscriptionService.deleteSubscription(subscription.id);
+        logger.info('Webhook subscription deleted successfully');
+    } catch (error) {
+        logger.error('Failed to delete webhook subscription', error);
+        throw error;
+    }
 }
 
-function showHelp() {
-    console.log('Usage:');
-    console.log('  npm run webhook:status                           Check webhook subscription status');
-    console.log('  npm run webhook:setup                            Create webhook subscription');
-    console.log('  npm run webhook:setup -- --url <url>            Create with custom URL');
-    console.log('  npm run webhook:delete                           Delete webhook subscription');
-    console.log('  npm run webhook:help                             Show this help message');
+/**
+ * Resolve callback URL based on environment and arguments
+ */
+async function resolveCallbackUrl(args: string[]): Promise<string> {
+    // Check for custom URL argument
+    const urlIndex = args.findIndex(arg => arg === '--url' || arg === '-u');
+    const customUrl = urlIndex !== -1 ? args[urlIndex + 1] : null;
+
+    if (customUrl) {
+        return `${customUrl}/api/strava/webhook`;
+    }
+
+    // Development environment requires public URL
+    if (config.isDevelopment) {
+        const ngrokUrl = process.env.NGROK_URL;
+
+        if (!ngrokUrl) {
+            console.error('\nDevelopment environment requires a public URL.');
+            console.error('\nOption 1 - Use ngrok:');
+            console.error('  1. Install: https://ngrok.com');
+            console.error('  2. Start tunnel: ngrok http 3001');
+            console.error('  3. Run: npm run webhook:setup -- --url https://[subdomain].ngrok.io');
+            console.error('\nOption 2 - Set environment variable:');
+            console.error('  1. Add to .env: NGROK_URL=https://[subdomain].ngrok.io');
+            console.error('  2. Run: npm run webhook:setup');
+
+            throw new Error('Public URL required for development environment');
+        }
+
+        return `${ngrokUrl}/api/strava/webhook`;
+    }
+
+    // Production uses configured APP_URL
+    return `${config.APP_URL}/api/strava/webhook`;
+}
+
+/**
+ * Display help information
+ */
+function showHelp(): void {
+    console.log('\nUsage: npm run webhook:<command> [options]');
+    console.log('\nCommands:');
+
+    commands.forEach(cmd => {
+        const aliases = cmd.aliases.length > 0 ? ` (${cmd.aliases.join(', ')})` : '';
+        console.log(`  ${cmd.name.padEnd(10)} ${cmd.description}${aliases}`);
+    });
+
+    console.log('\nOptions:');
+    console.log('  --url, -u <url>  Specify custom callback URL');
+
     console.log('\nExamples:');
+    console.log('  npm run webhook:status');
     console.log('  npm run webhook:setup -- --url https://your-app.vercel.app');
     console.log('  npm run webhook:setup -- --url https://abc123.ngrok.io');
-    console.log('\nEnvironment Requirements:');
-    console.log('  APP_URL                       Your app URL (always required)');
-    console.log('  STRAVA_CLIENT_ID              Your Strava app client ID');
-    console.log('  STRAVA_CLIENT_SECRET          Your Strava app client secret');
-    console.log('  STRAVA_WEBHOOK_VERIFY_TOKEN   Your webhook verification token');
-    console.log('  NGROK_URL                     Your ngrok URL (optional, for dev webhooks)');
+    console.log('  npm run webhook:delete');
+
+    console.log('\nRequired Environment Variables:');
+    console.log('  APP_URL                      - Application base URL');
+    console.log('  STRAVA_CLIENT_ID             - Strava OAuth client ID');
+    console.log('  STRAVA_CLIENT_SECRET         - Strava OAuth client secret');
+    console.log('  STRAVA_WEBHOOK_VERIFY_TOKEN  - Webhook verification token');
+
+    console.log('\nOptional Environment Variables:');
+    console.log('  NGROK_URL                    - Public tunnel URL for development');
 }
 
-// Run the script
-main().catch(error => {
-    console.error('Fatal error:', error);
-    process.exit(1);
-});
+// Execute script
+if (require.main === module) {
+    main().catch(error => {
+        logger.error('Fatal error', error);
+        process.exit(1);
+    });
+}
