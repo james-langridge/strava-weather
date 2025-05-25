@@ -1,106 +1,212 @@
 import { config } from '../config/environment';
 import { webhookSubscriptionService } from './webhookSubscription';
+import { logger } from '../utils/logger';
 
 /**
- * Automatically setup webhook subscription on app startup
+ * Webhook setup service
+ *
+ * Manages automatic webhook subscription setup on application startup
+ * and cleanup on shutdown. Handles both production and development
+ * environments with appropriate configuration.
+ */
+
+/**
+ * Setup Strava webhook subscription on application startup
+ *
+ * This function:
+ * 1. Checks for existing webhook subscriptions
+ * 2. Creates a new subscription if none exists
+ * 3. Verifies endpoint accessibility before creation
+ * 4. Handles different environments (production vs development)
+ *
+ * In development, requires ngrok for public URL exposure.
+ * In production, uses the configured APP_URL.
+ *
+ * @returns Promise that resolves when setup is complete
  */
 export async function setupWebhookOnStartup(): Promise<void> {
-    console.log('🚀 Webhook setup started!');
-    console.log('Environment vars check:');
-    console.log('- APP_URL:', config.APP_URL);
-    console.log('- isProduction:', config.isProduction);
-    console.log('- VERCEL_URL:', process.env.VERCEL_URL);
+    logger.info('Starting webhook subscription setup', {
+        environment: config.isProduction ? 'production' : 'development',
+        appUrl: config.APP_URL,
+        hasVercelUrl: !!process.env.VERCEL_URL,
+    });
 
     try {
-        console.log('\n🔄 Checking Strava webhook subscription...');
+        // Check for existing subscription
+        logger.debug('Checking for existing webhook subscription');
 
-        // Check if subscription already exists
         const existingSubscription = await webhookSubscriptionService.viewSubscription();
 
         if (existingSubscription) {
-            console.log('✅ Webhook subscription already exists:');
-            console.log(`   ID: ${existingSubscription.id}`);
-            console.log(`   Callback URL: ${existingSubscription.callback_url}`);
+            logger.info('Webhook subscription already exists', {
+                subscriptionId: existingSubscription.id,
+                callbackUrl: existingSubscription.callback_url,
+            });
             return;
         }
 
-        console.log('📍 No webhook subscription found. Creating one...');
+        logger.info('No existing webhook subscription found, creating new subscription');
 
-        let callbackUrl: string;
+        // Determine callback URL based on environment
+        const callbackUrl = await determineCallbackUrl();
 
-        if (config.isProduction) {
-            // In production, use APP_URL directly
-            callbackUrl = `${config.APP_URL}/api/strava/webhook`;
-        } else {
-            // In development, check for ngrok URL or skip
-            const ngrokUrl = process.env.NGROK_URL;
-
-            if (!ngrokUrl) {
-                console.log('ℹ️  Development mode: No NGROK_URL found.');
-                console.log('   To enable webhooks in development:');
-                console.log('   1. Install ngrok: https://ngrok.com');
-                console.log('   2. Run: ngrok http 3001');
-                console.log('   3. Set NGROK_URL=https://your-subdomain.ngrok.io in .env');
-                console.log('   4. Restart the server\n');
-                return;
-            }
-
-            callbackUrl = `${ngrokUrl}/api/strava/webhook`;
+        if (!callbackUrl) {
+            // determineCallbackUrl logs the reason for returning null
+            return;
         }
 
-        console.log(`📍 Setting up webhook with callback URL: ${callbackUrl}`);
+        logger.info('Webhook callback URL determined', {
+            callbackUrl,
+            environment: config.isProduction ? 'production' : 'development',
+        });
 
-        // Verify the endpoint is accessible before creating subscription
-        console.log('🔍 Verifying webhook endpoint accessibility...');
+        // Verify endpoint accessibility
+        logger.debug('Verifying webhook endpoint accessibility', { callbackUrl });
+
         const isAccessible = await webhookSubscriptionService.verifyEndpoint(callbackUrl);
 
         if (!isAccessible) {
-            console.error('❌ Webhook endpoint is not accessible at:', callbackUrl);
-            console.error('   The server may not be fully started or publicly accessible.');
-            console.error('   Webhook subscription was not created.');
+            logger.error('Webhook endpoint verification failed', {
+                callbackUrl,
+                message: 'Endpoint is not publicly accessible',
+            });
 
             if (!config.isProduction) {
-                console.log('\n💡 For local development:');
-                console.log('   Make sure ngrok is running and NGROK_URL is correct.');
+                logger.info('Development webhook setup instructions', {
+                    steps: [
+                        'Ensure ngrok is running: ngrok http 3001',
+                        'Update NGROK_URL in .env with the https URL from ngrok',
+                        'Restart the application',
+                    ],
+                });
             }
             return;
         }
 
-        // Create the subscription
+        logger.debug('Webhook endpoint verified as accessible');
+
+        // Create subscription
         const subscription = await webhookSubscriptionService.createSubscription(callbackUrl);
 
-        console.log('\n✅ Webhook subscription created successfully!');
-        console.log(`   ID: ${subscription.id}`);
-        console.log(`   Callback URL: ${subscription.callback_url}`);
-        console.log('   Your app will now receive activity events from Strava.\n');
+        logger.info('Webhook subscription created successfully', {
+            subscriptionId: subscription.id,
+            callbackUrl: subscription.callback_url,
+            message: 'Application will now receive Strava activity events',
+        });
 
     } catch (error) {
-        // Don't crash the app if webhook setup fails
-        console.error('\n❌ Failed to setup webhook subscription:', error instanceof Error ? error.message : error);
-        console.error('   The app will continue running without webhooks.');
-        console.error('   You can manually setup webhooks later using the admin API.\n');
+        // Non-fatal error - application continues without webhooks
+        logger.error('Failed to setup webhook subscription', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+            message: 'Application will continue without webhook functionality',
+        });
     }
 }
 
 /**
- * Cleanup webhook subscription (for graceful shutdown)
+ * Cleanup webhook subscription on application shutdown
+ *
+ * Removes webhook subscription during graceful shutdown.
+ * Only runs in development or when explicitly enabled via
+ * CLEANUP_WEBHOOK_ON_SHUTDOWN environment variable.
+ *
+ * This prevents orphaned subscriptions during development
+ * but preserves them in production deployments.
+ *
+ * @returns Promise that resolves when cleanup is complete
  */
 export async function cleanupWebhookOnShutdown(): Promise<void> {
-    // Only cleanup in development or if explicitly requested
-    if (!config.isDevelopment && process.env.CLEANUP_WEBHOOK_ON_SHUTDOWN !== 'true') {
+    const shouldCleanup = config.isDevelopment || process.env.CLEANUP_WEBHOOK_ON_SHUTDOWN === 'true';
+
+    if (!shouldCleanup) {
+        logger.debug('Webhook cleanup skipped', {
+            isDevelopment: config.isDevelopment,
+            cleanupEnvVar: process.env.CLEANUP_WEBHOOK_ON_SHUTDOWN,
+        });
         return;
     }
 
     try {
-        console.log('\n🧹 Cleaning up webhook subscription...');
+        logger.info('Starting webhook subscription cleanup');
 
         const subscription = await webhookSubscriptionService.viewSubscription();
 
-        if (subscription) {
-            await webhookSubscriptionService.deleteSubscription(subscription.id);
-            console.log('✅ Webhook subscription deleted');
+        if (!subscription) {
+            logger.debug('No webhook subscription found to cleanup');
+            return;
         }
+
+        await webhookSubscriptionService.deleteSubscription(subscription.id);
+
+        logger.info('Webhook subscription cleaned up successfully', {
+            subscriptionId: subscription.id,
+        });
+
     } catch (error) {
-        console.error('❌ Failed to cleanup webhook:', error instanceof Error ? error.message : error);
+        logger.error('Failed to cleanup webhook subscription', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+        });
     }
+}
+
+/**
+ * Determine the appropriate callback URL based on environment
+ *
+ * Production: Uses APP_URL from configuration
+ * Development: Requires NGROK_URL for public accessibility
+ *
+ * @returns Callback URL or null if unable to determine
+ */
+async function determineCallbackUrl(): Promise<string | null> {
+    if (config.isProduction) {
+        return `${config.APP_URL}/api/strava/webhook`;
+    }
+
+    // Development mode requires ngrok
+    const ngrokUrl = process.env.NGROK_URL;
+
+    if (!ngrokUrl) {
+        logger.warn('Development mode: No NGROK_URL configured', {
+            instructions: {
+                step1: 'Install ngrok from https://ngrok.com',
+                step2: 'Run: ngrok http 3001',
+                step3: 'Add NGROK_URL=https://your-subdomain.ngrok.io to .env',
+                step4: 'Restart the application',
+            },
+            message: 'Webhooks disabled in development without ngrok',
+        });
+        return null;
+    }
+
+    // Validate ngrok URL format
+    if (!ngrokUrl.startsWith('https://') || !ngrokUrl.includes('ngrok')) {
+        logger.error('Invalid NGROK_URL format', {
+            ngrokUrl,
+            expectedFormat: 'https://subdomain.ngrok.io',
+        });
+        return null;
+    }
+
+    return `${ngrokUrl}/api/strava/webhook`;
+}
+
+/**
+ * Register shutdown handlers for graceful cleanup
+ *
+ * This should be called during application initialization to ensure
+ * proper cleanup when the process terminates.
+ */
+export function registerShutdownHandlers(): void {
+    const shutdownHandler = async (signal: string) => {
+        logger.info('Shutdown signal received', { signal });
+        await cleanupWebhookOnShutdown();
+        process.exit(0);
+    };
+
+    process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+    process.on('SIGINT', () => shutdownHandler('SIGINT'));
+
+    logger.debug('Shutdown handlers registered');
 }
