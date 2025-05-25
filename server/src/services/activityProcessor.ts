@@ -62,13 +62,13 @@ export class ActivityProcessor {
         try {
             log(`🔄 START processing activity ${activityId} for user ${userId}`);
 
-            // Get user's Strava tokens
+            // Get user's Strava tokens (encrypted)
             log('📊 Fetching user from database...');
             const user = await prisma.user.findUnique({
                 where: { id: userId },
                 select: {
-                    accessToken: true,
-                    refreshToken: true,
+                    accessToken: true,  // Encrypted
+                    refreshToken: true, // Encrypted
                     tokenExpiresAt: true,
                     weatherEnabled: true,
                     firstName: true,
@@ -93,23 +93,23 @@ export class ActivityProcessor {
                 };
             }
 
-            // Check if token needs refresh
+            // Check if token needs refresh (tokens are encrypted)
             log('🔑 Checking token validity...');
             const tokenData = await stravaApiService.ensureValidToken(
-                user.accessToken,
-                user.refreshToken,
+                user.accessToken,  // Encrypted
+                user.refreshToken, // Encrypted
                 user.tokenExpiresAt
             );
             log(`✅ Token ${tokenData.wasRefreshed ? 'was refreshed' : 'is valid'}`);
 
-            // Update tokens if refreshed
+            // Update tokens if refreshed (store encrypted)
             if (tokenData.wasRefreshed) {
                 log('💾 Saving refreshed tokens...');
                 await prisma.user.update({
                     where: { id: userId },
                     data: {
-                        accessToken: tokenData.accessToken,
-                        refreshToken: tokenData.refreshToken,
+                        accessToken: tokenData.accessToken,   // Encrypted
+                        refreshToken: tokenData.refreshToken, // Encrypted
                         tokenExpiresAt: tokenData.expiresAt,
                         updatedAt: new Date(),
                     },
@@ -117,7 +117,7 @@ export class ActivityProcessor {
                 log('✅ Tokens updated in database');
             }
 
-            // Get activity from Strava
+            // Get activity from Strava (pass encrypted token)
             log(`🏃 Fetching activity ${activityId} from Strava...`);
             const activity = await stravaApiService.getActivity(activityId, tokenData.accessToken);
             log(`✅ Activity retrieved: "${activity.name}" (${activity.type})`);
@@ -163,7 +163,7 @@ export class ActivityProcessor {
             const updatedDescription = this.createWeatherDescription(activity, weatherData);
             log(`✅ Description created (${updatedDescription.length} chars)`);
 
-            // Update activity on Strava
+            // Update activity on Strava (pass encrypted token)
             log('📤 Updating activity on Strava...');
             await stravaApiService.updateActivity(activityId, tokenData.accessToken, {
                 description: updatedDescription,

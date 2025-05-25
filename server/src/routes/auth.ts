@@ -4,6 +4,7 @@ import { generateJWT, setAuthCookie, clearAuthCookie, authenticateUser, verifyJW
 import { prisma } from "../lib";
 import { ensureWebhooksInitialized } from "../utils/initWebhooks";
 import { stravaApiService } from '../services/stravaApi';
+import { encryptionService } from '../services/encryption';
 
 const authRouter: Router = Router();
 
@@ -88,11 +89,15 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
         }
 
         try {
+            // Encrypt tokens before storing
+            const encryptedAccessToken = encryptionService.encrypt(tokenData.access_token);
+            const encryptedRefreshToken = encryptionService.encrypt(tokenData.refresh_token);
+
             const user = await prisma.user.upsert({
                 where: { stravaAthleteId: athlete.id.toString() },
                 update: {
-                    accessToken: tokenData.access_token,
-                    refreshToken: tokenData.refresh_token,
+                    accessToken: encryptedAccessToken,
+                    refreshToken: encryptedRefreshToken,
                     tokenExpiresAt: new Date(tokenData.expires_at * 1000),
                     firstName: athlete.firstname || '',
                     lastName: athlete.lastname || '',
@@ -105,8 +110,8 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
                 },
                 create: {
                     stravaAthleteId: athlete.id.toString(),
-                    accessToken: tokenData.access_token,
-                    refreshToken: tokenData.refresh_token,
+                    accessToken: encryptedAccessToken,
+                    refreshToken: encryptedRefreshToken,
                     tokenExpiresAt: new Date(tokenData.expires_at * 1000),
                     firstName: athlete.firstname || '',
                     lastName: athlete.lastname || '',
@@ -214,8 +219,11 @@ authRouter.delete('/revoke', authenticateUser, async (req: Request, res: Respons
 
         console.log(`🔐 Revoking Strava access for user ${user.id}`);
 
+        // Decrypt the access token to revoke it
+        const decryptedAccessToken = encryptionService.decrypt(user.accessToken);
+
         // Revoke the Strava token
-        await stravaApiService.revokeToken(user.accessToken);
+        await stravaApiService.revokeToken(decryptedAccessToken);
 
         // Delete the user from our database
         await prisma.user.delete({

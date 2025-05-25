@@ -16,7 +16,8 @@ export interface AuthenticatedUser {
     firstName: string;
     lastName: string;
     weatherEnabled: boolean;
-    accessToken: string;
+    accessToken: string; // This will be encrypted
+    refreshToken?: string; // Optional, encrypted when present
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -127,6 +128,8 @@ export function clearAuthCookie(res: Response): void {
 
 /**
  * Middleware to authenticate requests
+ * Note: Access tokens are stored encrypted in the database and passed encrypted
+ * to services that need them. Services handle decryption internally.
  */
 export async function authenticateUser(
     req: Request,
@@ -153,7 +156,7 @@ export async function authenticateUser(
             select: {
                 id: true,
                 stravaAthleteId: true,
-                accessToken: true,
+                accessToken: true, // Encrypted
                 weatherEnabled: true,
                 firstName: true,
                 lastName: true,
@@ -169,10 +172,11 @@ export async function authenticateUser(
         }
 
         // Add user to request object
+        // Note: accessToken remains encrypted - services will decrypt as needed
         (req as AuthenticatedRequest).user = {
             id: user.id,
             stravaAthleteId: user.stravaAthleteId,
-            accessToken: user.accessToken,
+            accessToken: user.accessToken, // Encrypted
             weatherEnabled: user.weatherEnabled,
             firstName: user.firstName ?? '',
             lastName: user.lastName ?? '',

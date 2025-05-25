@@ -1,4 +1,5 @@
 import {config} from '../config/environment';
+import { encryptionService } from './encryption';
 
 export interface StravaActivity {
     id: number;
@@ -44,9 +45,12 @@ export class StravaApiService {
     /**
      * Get specific activity by ID
      */
-    async getActivity(activityId: string, accessToken: string): Promise<StravaActivity> {
+    async getActivity(activityId: string, encryptedAccessToken: string): Promise<StravaActivity> {
         try {
             console.log(`🏃 Fetching activity ${activityId} from Strava`);
+
+            // Decrypt the access token
+            const accessToken = encryptionService.decrypt(encryptedAccessToken);
 
             const response = await fetch(`${this.baseUrl}/activities/${activityId}`, {
                 headers: {
@@ -83,11 +87,14 @@ export class StravaApiService {
      */
     async updateActivity(
         activityId: string,
-        accessToken: string,
+        encryptedAccessToken: string,
         updateData: StravaUpdateData
     ): Promise<StravaActivity> {
         try {
             console.log(`🔄 Updating activity ${activityId} on Strava`);
+
+            // Decrypt the access token
+            const accessToken = encryptionService.decrypt(encryptedAccessToken);
 
             const response = await fetch(`${this.baseUrl}/activities/${activityId}`, {
                 method: 'PUT',
@@ -127,13 +134,16 @@ export class StravaApiService {
     /**
      * Refresh an expired access token
      */
-    async refreshAccessToken(refreshToken: string): Promise<{
+    async refreshAccessToken(encryptedRefreshToken: string): Promise<{
         access_token: string;
         refresh_token: string;
         expires_at: number;
     }> {
         try {
             console.log('🔄 Refreshing Strava access token');
+
+            // Decrypt the refresh token
+            const refreshToken = encryptionService.decrypt(encryptedRefreshToken);
 
             const response = await fetch(config.STRAVA_TOKEN_URL, {
                 method: 'POST',
@@ -171,14 +181,15 @@ export class StravaApiService {
 
     /**
      * Check if access token needs refresh and refresh if necessary
+     * Returns encrypted tokens
      */
     async ensureValidToken(
-        accessToken: string,
-        refreshToken: string,
+        encryptedAccessToken: string,
+        encryptedRefreshToken: string,
         expiresAt: Date
     ): Promise<{
-        accessToken: string;
-        refreshToken: string;
+        accessToken: string;  // Encrypted
+        refreshToken: string; // Encrypted
         expiresAt: Date;
         wasRefreshed: boolean;
     }> {
@@ -189,19 +200,20 @@ export class StravaApiService {
         if (expiresAt <= fiveMinutesFromNow) {
             console.log('🔄 Access token expires soon, refreshing...');
 
-            const tokenData = await this.refreshAccessToken(refreshToken);
+            const tokenData = await this.refreshAccessToken(encryptedRefreshToken);
 
+            // Encrypt the new tokens before returning
             return {
-                accessToken: tokenData.access_token,
-                refreshToken: tokenData.refresh_token,
+                accessToken: encryptionService.encrypt(tokenData.access_token),
+                refreshToken: encryptionService.encrypt(tokenData.refresh_token),
                 expiresAt: new Date(tokenData.expires_at * 1000),
                 wasRefreshed: true,
             };
         }
 
         return {
-            accessToken,
-            refreshToken,
+            accessToken: encryptedAccessToken,
+            refreshToken: encryptedRefreshToken,
             expiresAt,
             wasRefreshed: false,
         };
@@ -210,9 +222,12 @@ export class StravaApiService {
     /**
      * Revoke access token
      */
-    async revokeToken(accessToken: string): Promise<void> {
+    async revokeToken(encryptedAccessToken: string): Promise<void> {
         try {
             console.log('🔐 Revoking Strava access token');
+
+            // Decrypt the access token
+            const accessToken = encryptionService.decrypt(encryptedAccessToken);
 
             const response = await fetch('https://www.strava.com/oauth/deauthorize', {
                 method: 'POST',

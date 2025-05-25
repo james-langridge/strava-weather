@@ -33,6 +33,9 @@ const environmentSchema = z.object({
 
     // JWT Secret for session tokens
     JWT_SECRET: z.string().min(32),
+
+    // Encryption key for sensitive data
+    ENCRYPTION_KEY: z.string().min(32),
 });
 
 // Parse and validate environment variables
