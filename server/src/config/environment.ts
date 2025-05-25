@@ -4,7 +4,7 @@ import path from 'path';
 
 // Load environment variables
 dotenvConfig({
-    path: path.resolve(process.cwd(), process.cwd().endsWith('/api') ? '../.env' : '.env')
+    path: path.resolve(process.cwd(), process.cwd().endsWith('/server') ? '../.env' : '.env')
 });
 
 // Environment validation schema

@@ -22,7 +22,7 @@
     "build:all": "npm run build:server && npm run build:web",
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w web\"",
     "dev:web": "npm run dev -w web",
-    "dev:v": "npm run dev -w server",
+    "dev:server": "npm run dev -w server",
     "build": "npm run build -w server && npm run build -w web",
     "build:server": "npm run build -w server",
     "build:web": "npm run build -w web",
