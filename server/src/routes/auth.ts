@@ -28,7 +28,7 @@ authRouter.get('/strava', (req: Request, res: Response) => {
     // Store state in session for verification (in production, use a more secure method)
     // For now, we'll just generate it and verify on callback
 
-    const authUrl = new URL(config.STRAVA_OAUTH_URL);
+    const authUrl = new URL(config.api.strava.authUrl);
     authUrl.searchParams.set('client_id', config.STRAVA_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', `${config.APP_URL}/api/auth/strava/callback`);
     authUrl.searchParams.set('response_type', 'code');
@@ -63,7 +63,7 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
         // Exchange code for access token
         console.log('🔑 Exchanging authorization code for access token');
 
-        const tokenResponse = await fetch(config.STRAVA_TOKEN_URL, {
+        const tokenResponse = await fetch(config.api.strava.tokenUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -177,8 +177,8 @@ authRouter.post('/logout', (req: Request, res: Response) => {
 authRouter.get('/check', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         console.log('🍪 Cookies received:', req.cookies);
-        console.log('🔍 Looking for cookie:', config.SESSION_COOKIE_NAME);
-        const token = req.cookies?.[config.SESSION_COOKIE_NAME];
+        console.log('🔍 Looking for cookie:', config.auth.sessionCookieName);
+        const token = req.cookies?.[config.auth.sessionCookieName];
 
         if (!token) {
             console.log('❌ No auth token found in cookies');

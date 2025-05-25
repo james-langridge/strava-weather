@@ -122,7 +122,7 @@ function hasWeatherInDescription(description: string | null): boolean {
  */
 async function fetchStravaActivity(activityId: string, accessToken: string): Promise<StravaActivity | null> {
     try {
-        const response = await fetch(`${config.STRAVA_API_BASE_URL}/activities/${activityId}`, {
+        const response = await fetch(`${config.api.strava.baseUrl}/activities/${activityId}`, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 'Accept': 'application/json',
@@ -161,7 +161,7 @@ async function fetchWeatherData(lat: number, lon: number, date: Date): Promise<W
         if (hoursSinceActivity > 1 && hoursSinceActivity <= 120) { // 1 hour to 5 days ago
             // Use Time Machine for historical data
             const timestamp = Math.floor(date.getTime() / 1000);
-            url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine`;
+            url = `${config.api.openWeatherMap.oneCallUrl}/timemachine`;
             params = {
                 lat: lat.toFixed(6),
                 lon: lon.toFixed(6),
@@ -173,7 +173,7 @@ async function fetchWeatherData(lat: number, lon: number, date: Date): Promise<W
             console.log(`🕐 Using Time Machine for ${date.toISOString()}`);
         } else {
             // Use One Call current data
-            url = config.OPENWEATHERMAP_ONECALL_URL;
+            url = config.api.openWeatherMap.oneCallUrl;
             params = {
                 lat: lat.toFixed(6),
                 lon: lon.toFixed(6),
@@ -277,7 +277,7 @@ function addWeatherToDescription(existingDescription: string | null, weatherDesc
  */
 async function updateStravaActivityDescription(activityId: string, description: string, accessToken: string): Promise<void> {
     try {
-        const response = await fetch(`${config.STRAVA_API_BASE_URL}/activities/${activityId}`, {
+        const response = await fetch(`${config.api.strava.baseUrl}/activities/${activityId}`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,

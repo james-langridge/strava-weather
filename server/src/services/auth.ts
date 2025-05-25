@@ -79,7 +79,7 @@ export function verifyJWT(token: string): JwtPayload {
  */
 function extractTokenFromRequest(req: Request): string | null {
     // First check for HTTP-only cookie (most secure)
-    const cookieToken = req.cookies?.[config.SESSION_COOKIE_NAME];
+    const cookieToken = req.cookies?.[config.auth.sessionCookieName];
     if (cookieToken) {
         return cookieToken;
     }
@@ -107,16 +107,16 @@ export function setAuthCookie(res: Response, token: string): void {
         // This works for both local development and production
     };
 
-    res.cookie(config.SESSION_COOKIE_NAME, token, cookieOptions);
+    res.cookie(config.auth.sessionCookieName, token, cookieOptions);
 
-    console.log(`🍪 Set auth cookie: ${config.SESSION_COOKIE_NAME}`);
+    console.log(`🍪 Set auth cookie: ${config.auth.sessionCookieName}`);
 }
 
 /**
  * Clear auth cookie
  */
 export function clearAuthCookie(res: Response): void {
-    res.clearCookie(config.SESSION_COOKIE_NAME, {
+    res.clearCookie(config.auth.sessionCookieName, {
         httpOnly: true,
         secure: true,  // Must match what was set
         sameSite: 'lax',

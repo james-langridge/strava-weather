@@ -145,7 +145,7 @@ export class StravaApiService {
             // Decrypt the refresh token
             const refreshToken = encryptionService.decrypt(encryptedRefreshToken);
 
-            const response = await fetch(config.STRAVA_TOKEN_URL, {
+            const response = await fetch(config.api.strava.tokenUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

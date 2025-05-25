@@ -95,7 +95,7 @@ export class WeatherService {
      * More accurate than the basic weather endpoint
      */
     private async getCurrentWeatherFromOneCall(lat: number, lon: number): Promise<WeatherData> {
-        const url = config.OPENWEATHERMAP_ONECALL_URL;
+        const url = config.api.openWeatherMap.oneCallUrl;
         const params = {
             lat: lat.toFixed(6),
             lon: lon.toFixed(6),
@@ -132,7 +132,7 @@ export class WeatherService {
      * For activities 1 hour to 5 days in the past
      */
     private async getHistoricalWeather(lat: number, lon: number, time: Date): Promise<WeatherData> {
-        const url = `${config.OPENWEATHERMAP_ONECALL_URL}/timemachine`;
+        const url = `${config.api.openWeatherMap.oneCallUrl}/timemachine`;
         const dt = Math.floor(time.getTime() / 1000);
 
         const params = {

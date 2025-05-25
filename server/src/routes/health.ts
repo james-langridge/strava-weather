@@ -141,7 +141,7 @@ async function checkStravaAPI(): Promise<ServiceStatus> {
 
     try {
         // Simple request to Strava API to check if it's accessible
-        const response = await fetch(`${config.STRAVA_API_BASE_URL}/athlete`, {
+        const response = await fetch(`${config.api.strava.baseUrl}/athlete`, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -176,7 +176,7 @@ async function checkWeatherAPI(): Promise<ServiceStatus> {
 
     try {
         // Test request to One Call API with test coordinates
-        const testUrl = `${config.OPENWEATHERMAP_ONECALL_URL}?lat=0&lon=0&appid=${config.OPENWEATHERMAP_API_KEY}&exclude=minutely,hourly,daily,alerts`;
+        const testUrl = `${config.api.openWeatherMap.oneCallUrl}?lat=0&lon=0&appid=${config.OPENWEATHERMAP_API_KEY}&exclude=minutely,hourly,daily,alerts`;
         const response = await fetch(testUrl);
 
         // One Call API returns 400 for invalid coordinates (0,0) which is acceptable
