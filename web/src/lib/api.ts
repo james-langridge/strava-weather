@@ -1,6 +1,7 @@
-const API_BASE = import.meta.env.PROD
-    ? '/api'
-    : import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// API requests always use relative paths
+// In production: served from same domain
+// In development: Vite proxies /api/* to Express server
+const API_BASE = '/api';
 
 interface ApiResponse<T = any> {
     success: boolean;
@@ -106,18 +107,7 @@ class ApiClient {
     async checkAuth(): Promise<boolean> {
         try {
             const response = await this.request<{ authenticated: boolean }>('/auth/check');
-            console.log('checkAuth response:', response);
-            console.log('response type:', typeof response);
-            console.log('response keys:', Object.keys(response));
-            console.log('response.data:', response.data);
-            console.log('response.data?.authenticated:', response.data?.authenticated);
-
-            // Try both ways to see which one works
-            const dataCheck = response.data?.authenticated === true;
-
-            console.log('dataCheck:', dataCheck);
-
-            return dataCheck;
+            return response.data?.authenticated === true;
         } catch (error) {
             console.error('checkAuth error:', error);
             return false;

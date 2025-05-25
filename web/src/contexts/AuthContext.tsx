@@ -86,8 +86,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 }
             } else {
                 console.log('❌ Not authenticated');
-                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-                window.location.href = `${apiBase}/api/auth/strava`;
+                window.location.href = `/api/auth/strava`;
             }
 
         } catch (error) {

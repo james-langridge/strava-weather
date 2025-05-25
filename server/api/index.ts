@@ -14,10 +14,15 @@ import { adminRouter } from '../src/routes/admin';
 
 const app = express();
 
-app.use(cors({
-    origin: process.env.NODE_ENV === 'production' ? false : true,
+// CORS configuration
+const corsOptions = {
+    // In production, we're on the same domain so no CORS needed
+    // In development, Vite proxy handles it, so we can be permissive
+    origin: config.isProduction ? false : true,
     credentials: true,
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser()); // Must be before routes
 app.use(requestLogger);
@@ -40,7 +45,9 @@ if (process.env.NODE_ENV !== 'production') {
         console.log(`🔗 Webhook endpoint: http://localhost:${port}/api/strava/webhook`);
         console.log(`🔐 OAuth flow: http://localhost:${port}/api/auth/strava`);
         console.log(`👨‍💼 Admin endpoints: http://localhost:${port}/api/admin/webhook/*`);
-        console.log(`🍪 Cookie domain: ${config.FRONTEND_URL}`);
+        console.log(`🍪 Cookie domain: ${config.APP_URL}`);
+        console.log(`\n💡 Frontend dev server should be running on ${config.APP_URL}`);
+        console.log(`   API requests will be proxied from ${config.APP_URL}/api/* to this server`);
     });
 
     const gracefulShutdown = async (signal: string) => {

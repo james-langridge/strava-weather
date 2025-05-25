@@ -26,7 +26,7 @@ authRouter.get('/strava', (req: Request, res: Response) => {
 
     const authUrl = new URL(config.STRAVA_OAUTH_URL);
     authUrl.searchParams.set('client_id', config.STRAVA_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', `${config.FRONTEND_URL}/api/auth/strava/callback`);
+    authUrl.searchParams.set('redirect_uri', `${config.APP_URL}/api/auth/strava/callback`);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('approval_prompt', 'force');
     authUrl.searchParams.set('scope', scopes.join(','));
@@ -48,12 +48,12 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
         if (error) {
             console.log('❌ OAuth error:', error);
-            return res.redirect(`${config.FRONTEND_URL}/auth/error?error=${encodeURIComponent(error as string)}`);
+            return res.redirect(`${config.APP_URL}/auth/error?error=${encodeURIComponent(error as string)}`);
         }
 
         if (!code) {
             console.log('❌ No authorization code received');
-            return res.redirect(`${config.FRONTEND_URL}/auth/error?error=no_code`);
+            return res.redirect(`${config.APP_URL}/auth/error?error=no_code`);
         }
 
         // Exchange code for access token
@@ -75,7 +75,7 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
             console.error('❌ Token exchange failed:', errorText);
-            return res.redirect(`${config.FRONTEND_URL}/auth/error?error=token_exchange_failed`);
+            return res.redirect(`${config.APP_URL}/auth/error?error=token_exchange_failed`);
         }
 
         const tokenData = await tokenResponse.json();
@@ -85,7 +85,7 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
         if (!athlete) {
             console.error('❌ No athlete data in token response');
-            return res.redirect(`${config.FRONTEND_URL}/auth/error?error=no_athlete_data`);
+            return res.redirect(`${config.APP_URL}/auth/error?error=no_athlete_data`);
         }
 
         try {
@@ -132,12 +132,12 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
             setAuthCookie(res, token);
 
             // Redirect to success page without token in URL
-            const redirectUrl = new URL('/auth/success', config.FRONTEND_URL);
+            const redirectUrl = new URL('/auth/success', config.APP_URL);
             res.redirect(redirectUrl.toString());
 
         } catch (dbError) {
             console.error('❌ Database error during OAuth:', dbError);
-            return res.redirect(`${config.FRONTEND_URL}/auth/error?error=database_error`);
+            return res.redirect(`${config.APP_URL}/auth/error?error=database_error`);
         }
 
     } catch (error) {

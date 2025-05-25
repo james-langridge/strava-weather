@@ -12,10 +12,8 @@ const environmentSchema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.string().transform(Number).default('3001'),
 
-    // Frontend URL
-    FRONTEND_URL: z.string().url().default('http://localhost:5173'),
-
-    VITE_API_URL: z.string().url().default('http://localhost:3001'),
+    // App URL (required)
+    APP_URL: z.string().url(),
 
     // Database
     DATABASE_URL: z.string().url(),

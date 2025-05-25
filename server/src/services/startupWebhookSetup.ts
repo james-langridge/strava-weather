@@ -7,7 +7,7 @@ import { webhookSubscriptionService } from './webhookSubscription';
 export async function setupWebhookOnStartup(): Promise<void> {
     console.log('🚀 Webhook setup started!');
     console.log('Environment vars check:');
-    console.log('- VITE_API_URL:', config.VITE_API_URL);
+    console.log('- APP_URL:', config.APP_URL);
     console.log('- isProduction:', config.isProduction);
     console.log('- VERCEL_URL:', process.env.VERCEL_URL);
 
@@ -26,27 +26,11 @@ export async function setupWebhookOnStartup(): Promise<void> {
 
         console.log('📍 No webhook subscription found. Creating one...');
 
-        // Determine the callback URL based on environment
         let callbackUrl: string;
 
         if (config.isProduction) {
-            // In production, use environment variable or construct from known domain
-            const productionUrl = config.VITE_API_URL || process.env.VERCEL_URL;
-
-            if (!productionUrl) {
-                console.warn('⚠️  No VITE_API_URL or VERCEL_URL found in production.');
-                console.warn('   Set VITE_API_URL environment variable to enable automatic webhook setup.');
-                console.warn('   Example: VITE_API_URL=https://your-domain.com');
-                console.warn('   You can manually setup webhooks using the admin API.');
-                return;
-            }
-
-            // Ensure URL has protocol
-            const baseUrl = productionUrl.startsWith('http')
-                ? productionUrl
-                : `https://${productionUrl}`;
-
-            callbackUrl = `${baseUrl}/api/strava/webhook`;
+            // In production, use APP_URL directly
+            callbackUrl = `${config.APP_URL}/api/strava/webhook`;
         } else {
             // In development, check for ngrok URL or skip
             const ngrokUrl = process.env.NGROK_URL;

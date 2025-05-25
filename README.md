@@ -13,7 +13,7 @@ This is a full-stack application that automatically adds weather data to your St
 
 Deploy the entire app with one click:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjames-langridge%2Fstrava-weather&env=DATABASE_URL,STRAVA_CLIENT_ID,STRAVA_CLIENT_SECRET,STRAVA_WEBHOOK_VERIFY_TOKEN,OPENWEATHERMAP_API_KEY,JWT_SECRET,VITE_API_URL,FRONTEND_URL&envDescription=Required%20environment%20variables&envLink=https%3A%2F%2Fgithub.com%2Fjames-langridge%2Fstrava-weather%23environment-variables&project-name=strava-weather&repository-name=strava-weather)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjames-langridge%2Fstrava-weather&env=APP_URL,DATABASE_URL,STRAVA_CLIENT_ID,STRAVA_CLIENT_SECRET,STRAVA_WEBHOOK_VERIFY_TOKEN,OPENWEATHERMAP_API_KEY,JWT_SECRET,ENCRYPTION_KEY&envDescription=Required%20environment%20variables&envLink=https%3A%2F%2Fgithub.com%2Fjames-langridge%2Fstrava-weather%23environment-variables&project-name=strava-weather&repository-name=strava-weather)
 
 ## Prerequisites
 
@@ -54,6 +54,10 @@ Before deploying, you'll need:
 2. Fill in the environment variables:
 
 ```env
+# Your deployed app URL (required)
+# After deployment, update this with your actual Vercel URL
+APP_URL=https://your-app-name.vercel.app
+
 # Database (from Neon)
 DATABASE_URL=postgresql://username:password@host/database?sslmode=require
 
@@ -67,10 +71,7 @@ OPENWEATHERMAP_API_KEY=your_api_key
 
 # Security (generate with: openssl rand -base64 32)
 JWT_SECRET=generate_long_random_string_32_chars
-
-# URLs (use your Vercel app URL)
-VITE_API_URL=https://your-app-name.vercel.app
-FRONTEND_URL=https://your-app-name.vercel.app
+ENCRYPTION_KEY=generate_another_long_random_string_32_chars
 ```
 
 3. Click "Deploy" and wait for the build to complete
@@ -113,14 +114,14 @@ FRONTEND_URL=https://your-app-name.vercel.app
 
 | Variable | Description | Required |
 |----------|-------------|----------|
+| `APP_URL` | Your app URL (production) or http://localhost:5173 (dev) | ✅ |
 | `DATABASE_URL` | PostgreSQL connection string | ✅ |
 | `STRAVA_CLIENT_ID` | From your Strava app | ✅ |
 | `STRAVA_CLIENT_SECRET` | From your Strava app | ✅ |
 | `STRAVA_WEBHOOK_VERIFY_TOKEN` | Random string for webhook security | ✅ |
 | `OPENWEATHERMAP_API_KEY` | From OpenWeatherMap | ✅ |
 | `JWT_SECRET` | Random 32+ character string | ✅ |
-| `VITE_API_URL` | Your Vercel app URL | ✅ |
-| `FRONTEND_URL` | Your Vercel app URL | ✅ |
+| `ENCRYPTION_KEY` | Random 32+ character string | ✅ |
 | `ADMIN_TOKEN` | For admin endpoints (optional) | ➖ |
 
 ## Local Development
@@ -133,21 +134,24 @@ cd strava-weather
 # Install dependencies
 npm install
 
-# Set up environment
+# Set up environment variables
 cp .env.example .env
 # Edit .env with your values
+# Note: APP_URL is already set to http://localhost:5173 for local dev
 
 # Database setup
 npm run db:generate
 npm run db:migrate
 
 # Run development servers
-npm run dev
-
-# Or run separately:
-npm run dev:server  # Backend on http://localhost:3001
-npm run dev:web     # Frontend on http://localhost:5173
+npm run dev          # Both frontend and backend
 ```
+
+The development setup runs:
+- Frontend: `http://localhost:5173` (Vite dev server)
+- Backend: `http://localhost:3001` (Express server)
+
+API requests from the frontend are automatically proxied to the backend, so you can use relative paths like `/api/auth/strava` in your frontend code.
 
 ### Webhook Testing Locally
 
@@ -157,7 +161,10 @@ For local webhook testing, use [ngrok](https://ngrok.com/):
 # Start ngrok tunnel
 ngrok http 3001
 
-# Use the ngrok URL for VITE_API_URL and webhook setup
+# Add to .env:
+NGROK_URL=https://your-subdomain.ngrok.io
+
+# Restart the server - it will automatically set up webhooks
 ```
 
 ## Project Structure
@@ -190,6 +197,7 @@ strava-weather/
 - `GET /api/users/me` - Get current user
 - `PATCH /api/users/me` - Update user preferences
 - `POST /api/strava/webhook` - Webhook endpoint
+- `GET /api/admin/webhook/status` - Check webhook status (requires admin token)
 
 ## Tech Stack
 
@@ -216,6 +224,11 @@ strava-weather/
 - Confirm activity has GPS coordinates
 - Check OpenWeatherMap API quota
 - Verify user has weather updates enabled
+
+### Database Issues
+- Ensure `DATABASE_URL` includes `?sslmode=require` for Neon
+- Run migrations: `npm run db:migrate`
+- Check connection with: `npm run db:studio`
 
 ## Contributing
 

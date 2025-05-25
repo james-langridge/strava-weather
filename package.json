@@ -35,7 +35,10 @@
     "db:studio": "npm run studio -w server",
     "db:seed": "npm run seed -w server",
     "clean": "rm -rf node_modules server/node_modules web/node_modules server/dist web/dist",
-    "setup": "npm install && npm run db:generate"
+    "setup": "npm install && npm run db:generate",
+    "webhook:status": "npm run webhook:status -w server",
+    "webhook:setup": "npm run webhook:setup -w server",
+    "webhook:delete": "npm run webhook:delete -w server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

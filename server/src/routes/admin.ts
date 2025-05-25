@@ -35,7 +35,7 @@ adminRouter.get('/webhook/status', requireAdminAuth, async (req: Request, res: R
             data: {
                 hasSubscription: !!subscription,
                 subscription,
-                webhookEndpoint: `${req.protocol}://${req.get('host')}/api/strava/webhook`,
+                webhookEndpoint: `${config.APP_URL}/api/strava/webhook`,
                 verifyToken: config.STRAVA_WEBHOOK_VERIFY_TOKEN ? 'configured' : 'missing',
             },
         });
@@ -50,21 +50,8 @@ adminRouter.get('/webhook/status', requireAdminAuth, async (req: Request, res: R
  */
 adminRouter.post('/webhook/subscribe', requireAdminAuth, async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Determine the base URL
-        let baseUrl: string;
-
-        if (req.body.callback_url) {
-            // Use provided callback URL (for production with custom domain)
-            baseUrl = req.body.callback_url;
-        } else if (config.isProduction) {
-            // In production, use the host header
-            baseUrl = `https://${req.get('host')}`;
-        } else {
-            // In development, construct from request
-            baseUrl = `${req.protocol}://${req.get('host')}`;
-        }
-
-        const callbackUrl = `${baseUrl}/api/strava/webhook`;
+        // Use provided callback URL or default to APP_URL
+        const callbackUrl = req.body.callback_url || `${config.APP_URL}/api/strava/webhook`;
 
         console.log(`📍 Creating webhook subscription with callback URL: ${callbackUrl}`);
 
@@ -128,8 +115,7 @@ adminRouter.delete('/webhook/unsubscribe', requireAdminAuth, async (req: Request
  */
 adminRouter.get('/webhook/verify', requireAdminAuth, async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
-        const callbackUrl = `${baseUrl}/api/strava/webhook`;
+        const callbackUrl = `${config.APP_URL}/api/strava/webhook`;
 
         const isAccessible = await webhookSubscriptionService.verifyEndpoint(callbackUrl);
 
@@ -173,18 +159,10 @@ adminRouter.post('/webhook/setup', requireAdminAuth, async (req: Request, res: R
             return;
         }
 
-        // Determine the base URL
-        let baseUrl: string;
-
-        if (req.body.base_url) {
-            baseUrl = req.body.base_url;
-        } else if (config.isProduction) {
-            baseUrl = `https://${req.get('host')}`;
-        } else {
-            baseUrl = `${req.protocol}://${req.get('host')}`;
-        }
-
-        const callbackUrl = `${baseUrl}/api/strava/webhook`;
+        // Use provided base URL or APP_URL
+        const callbackUrl = req.body.base_url
+            ? `${req.body.base_url}/api/strava/webhook`
+            : `${config.APP_URL}/api/strava/webhook`;
 
         console.log(`📍 Setting up webhook with callback URL: ${callbackUrl}`);
 
@@ -288,8 +266,8 @@ adminRouter.get('/webhook/monitor', requireAdminAuth, async (req: Request, res: 
                 },
                 environment: {
                     nodeEnv: config.NODE_ENV,
-                    hasAppUrl: !!config.VITE_API_URL,
-                    appUrl: config.VITE_API_URL,
+                    hasAppUrl: !!config.APP_URL,
+                    appUrl: config.APP_URL,
                     isProduction: config.isProduction,
                 },
             },

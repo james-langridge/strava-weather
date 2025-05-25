@@ -5,8 +5,9 @@ import { webhookSubscriptionService } from '../src/services/webhookSubscription'
  * Script to set up Strava webhook subscription
  *
  * Usage:
+ * - npm run webhook:setup
  * - npm run webhook:setup -- --url https://your-domain.com
- * - npm run webhook:setup -- --delete
+ * - npm run webhook:delete
  * - npm run webhook:status
  */
 
@@ -27,8 +28,8 @@ async function main() {
             case 'setup':
             case '--setup':
                 const urlIndex = args.findIndex(arg => arg === '--url' || arg === '-u');
-                const baseUrl = urlIndex !== -1 ? args[urlIndex + 1] : null;
-                await setupWebhook(baseUrl);
+                const customUrl = urlIndex !== -1 ? args[urlIndex + 1] : null;
+                await setupWebhook(customUrl);
                 break;
 
             case 'delete':
@@ -68,11 +69,12 @@ async function checkStatus() {
     } else {
         console.log('❌ No webhook subscription found');
         console.log('\nTo create a subscription, run:');
+        console.log('   npm run webhook:setup');
         console.log('   npm run webhook:setup -- --url https://your-domain.com');
     }
 }
 
-async function setupWebhook(baseUrl: string | null | undefined) {
+async function setupWebhook(customUrl: string | null | undefined) {
     console.log('📍 Setting up webhook subscription...\n');
 
     // Check for existing subscription
@@ -86,16 +88,32 @@ async function setupWebhook(baseUrl: string | null | undefined) {
         return;
     }
 
-    if (!baseUrl) {
-        console.error('❌ Base URL is required for webhook setup\n');
-        console.log('Usage:');
-        console.log('   npm run webhook:setup -- --url https://your-domain.com');
-        console.log('\nFor local development with ngrok:');
-        console.log('   npm run webhook:setup -- --url https://your-subdomain.ngrok.io');
-        process.exit(1);
+    // Determine callback URL
+    let callbackUrl: string;
+
+    if (customUrl) {
+        // Use provided custom URL
+        callbackUrl = `${customUrl}/api/strava/webhook`;
+    } else if (config.isDevelopment) {
+        // In development, check for ngrok URL
+        const ngrokUrl = process.env.NGROK_URL;
+        if (!ngrokUrl) {
+            console.error('❌ In development, you need to provide a public URL\n');
+            console.log('Option 1: Use ngrok');
+            console.log('   1. Install ngrok: https://ngrok.com');
+            console.log('   2. Run: ngrok http 3001');
+            console.log('   3. Run: npm run webhook:setup -- --url https://your-subdomain.ngrok.io');
+            console.log('\nOption 2: Set NGROK_URL in .env');
+            console.log('   1. Add to .env: NGROK_URL=https://your-subdomain.ngrok.io');
+            console.log('   2. Run: npm run webhook:setup');
+            process.exit(1);
+        }
+        callbackUrl = `${ngrokUrl}/api/strava/webhook`;
+    } else {
+        // In production, use APP_URL
+        callbackUrl = `${config.APP_URL}/api/strava/webhook`;
     }
 
-    const callbackUrl = `${baseUrl}/api/strava/webhook`;
     console.log(`📍 Callback URL: ${callbackUrl}\n`);
 
     // Verify endpoint is accessible
@@ -106,9 +124,8 @@ async function setupWebhook(baseUrl: string | null | undefined) {
         console.error('\n❌ Webhook endpoint is not accessible!');
         console.error('   Make sure your server is running and publicly accessible.');
         console.error('\nFor local development:');
-        console.error('   1. Install ngrok: https://ngrok.com');
-        console.error('   2. Run: ngrok http 3001');
-        console.error('   3. Use the ngrok URL for webhook setup');
+        console.error('   1. Make sure the Express server is running (npm run dev:server)');
+        console.error('   2. Make sure ngrok is pointing to the correct port (3001)');
         process.exit(1);
     }
 
@@ -145,16 +162,19 @@ async function deleteWebhook() {
 function showHelp() {
     console.log('Usage:');
     console.log('  npm run webhook:status                           Check webhook subscription status');
-    console.log('  npm run webhook:setup -- --url <base-url>        Create webhook subscription');
+    console.log('  npm run webhook:setup                            Create webhook subscription');
+    console.log('  npm run webhook:setup -- --url <url>            Create with custom URL');
     console.log('  npm run webhook:delete                           Delete webhook subscription');
     console.log('  npm run webhook:help                             Show this help message');
     console.log('\nExamples:');
-    console.log('  npm run webhook:setup -- --url https://your-app.com');
+    console.log('  npm run webhook:setup -- --url https://your-app.vercel.app');
     console.log('  npm run webhook:setup -- --url https://abc123.ngrok.io');
     console.log('\nEnvironment Requirements:');
+    console.log('  APP_URL                       Your app URL (always required)');
     console.log('  STRAVA_CLIENT_ID              Your Strava app client ID');
     console.log('  STRAVA_CLIENT_SECRET          Your Strava app client secret');
     console.log('  STRAVA_WEBHOOK_VERIFY_TOKEN   Your webhook verification token');
+    console.log('  NGROK_URL                     Your ngrok URL (optional, for dev webhooks)');
 }
 
 // Run the script

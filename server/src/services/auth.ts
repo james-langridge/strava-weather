@@ -101,9 +101,10 @@ export function setAuthCookie(res: Response, token: string): void {
         httpOnly: true,
         secure: true, // Always true for production
         sameSite: 'lax' as const,
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         path: '/',
         // Don't set domain - let browser handle it
+        // This works for both local development and production
     };
 
     res.cookie(config.SESSION_COOKIE_NAME, token, cookieOptions);
