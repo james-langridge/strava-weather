@@ -1,47 +1,94 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext.tsx';
 import { useNavigate } from "react-router";
+import { logger } from '../lib/logger';
 
+/**
+ * Authentication success page component
+ *
+ * Handles the redirect flow after successful Strava OAuth authentication.
+ * This page is shown when users are redirected back from Strava after
+ * granting permissions to the application.
+ *
+ * Flow:
+ * 1. User redirected here from Strava OAuth callback
+ * 2. Component processes authentication via AuthContext
+ * 3. On success, redirects to dashboard
+ * 4. On failure, redirects to error page
+ *
+ * Also handles display of welcome message for new users.
+ */
 export function AuthSuccess() {
     const { login, user } = useAuth();
     const hasProcessed = useRef(false);
     const navigate = useNavigate();
 
+    /**
+     * Parse URL parameters on component load
+     */
+    const urlParams = new URLSearchParams(window.location.search);
+    const isNewUser = urlParams.get('new_user') === 'true';
+
+    /**
+     * Process authentication on mount
+     *
+     * This effect handles the initial authentication processing
+     * and prevents duplicate processing with a ref guard.
+     */
     useEffect(() => {
-        // If user is already set, go straight to dashboard
+        // If user is already authenticated, redirect immediately
         if (user) {
-            console.log('User already authenticated, redirecting to dashboard');
+            logger.info('User already authenticated on auth success page', {
+                userId: user.id,
+                redirectTo: '/dashboard',
+            });
             navigate('/dashboard', { replace: true });
             return;
         }
 
+        // Prevent duplicate authentication processing
         if (hasProcessed.current) return;
         hasProcessed.current = true;
 
         const processAuth = async () => {
             try {
-                console.log('🔐 Processing authentication...');
+                logger.info('Processing authentication callback', {
+                    isNewUser,
+                    hasUser: !!user,
+                });
+
                 await login();
-                // Don't navigate here - let the user state update trigger navigation
+                // Navigation happens in the user state effect below
+
             } catch (error) {
-                console.error('Failed to process authentication:', error);
+                logger.error('Failed to process authentication callback', error, {
+                    redirectTo: '/auth/error',
+                });
+
                 navigate('/auth/error?error=auth_failed', { replace: true });
             }
         };
 
         processAuth();
-    }, [user, login, navigate]);
+    }, [user, login, navigate, isNewUser]);
 
+    /**
+     * Handle navigation after user state updates
+     *
+     * Separate effect to handle navigation after the user
+     * state is updated by the login process.
+     */
     useEffect(() => {
         if (user) {
-            console.log('✅ User state updated, redirecting to dashboard...');
+            logger.info('Authentication successful, redirecting to dashboard', {
+                userId: user.id,
+                displayName: user.displayName,
+                isNewUser,
+            });
+
             navigate('/dashboard', { replace: true });
         }
-    }, [user, navigate]);
-
-    // Check if this is a new user
-    const urlParams = new URLSearchParams(window.location.search);
-    const isNewUser = urlParams.get('new_user') === 'true';
+    }, [user, navigate, isNewUser]);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center px-4">
@@ -53,9 +100,9 @@ export function AuthSuccess() {
                     </svg>
                 </div>
 
-                {/* Content */}
+                {/* Welcome/Success Message */}
                 <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                    {isNewUser ? '🎉 Welcome to Strava Weather!' : '✅ Successfully Connected!'}
+                    {isNewUser ? 'Welcome to Strava Weather!' : 'Successfully Connected!'}
                 </h1>
 
                 <p className="text-gray-600 mb-6">
@@ -65,17 +112,20 @@ export function AuthSuccess() {
                     }
                 </p>
 
-                {/* Loading indicator */}
+                {/* Loading Indicator */}
                 <div className="flex items-center justify-center space-x-2 text-gray-500">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
                     <span className="text-sm">Completing authentication...</span>
                 </div>
 
-                {/* Manual redirect button */}
+                {/* Manual Redirect Fallback */}
                 <div className="mt-6">
                     <a
                         href="/dashboard"
                         className="inline-flex items-center text-orange-600 hover:text-orange-700 font-medium text-sm"
+                        onClick={() => {
+                            logger.debug('Manual dashboard redirect clicked');
+                        }}
                     >
                         Or click here to go to dashboard
                         <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +134,7 @@ export function AuthSuccess() {
                     </a>
                 </div>
 
-                {/* Quick tips for new users */}
+                {/* Quick Tips for New Users */}
                 {isNewUser && (
                     <div className="mt-8 p-4 bg-blue-50 rounded-lg text-left">
                         <h3 className="font-semibold text-blue-900 mb-2">Quick Tips:</h3>
