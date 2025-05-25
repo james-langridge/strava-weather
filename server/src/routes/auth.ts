@@ -6,7 +6,7 @@ import { ensureWebhooksInitialized } from '../utils/initWebhooks';
 import { stravaApiService } from '../services/stravaApi';
 import { encryptionService } from '../services/encryption';
 import { logger } from '../utils/logger';
-import { AppError, asyncHandler } from '../middleware/errorHandler';
+import { asyncHandler } from '../middleware/errorHandler';
 import crypto from 'crypto';
 
 /**
