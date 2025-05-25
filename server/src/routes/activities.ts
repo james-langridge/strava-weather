@@ -1,46 +1,133 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { activityProcessor } from '../services/activityProcessor';
 import { authenticateUser } from '../services/auth';
-import { AppError } from '../middleware/errorHandler';
+import { AppError, asyncHandler } from '../middleware/errorHandler';
+import { logger } from '../utils/logger';
 
+/**
+ * Activities router
+ *
+ * Handles manual activity processing requests, allowing users to
+ * trigger weather data updates for specific Strava activities.
+ */
 const activitiesRouter = Router();
 
 /**
- * POST /api/activities/process/:activityId
+ * Request validation schemas
  */
-activitiesRouter.post('/process/:activityId', authenticateUser, async (req: Request, res: Response, next: NextFunction) => {    try {
-        const user = req.user;
-        const { activityId } = req.params;
-        const { forceUpdate } = req.body;
+const processActivityParamsSchema = z.object({
+    activityId: z.string().regex(/^\d+$/, 'Activity ID must be numeric'),
+});
 
-        if (!activityId || !/^\d+$/.test(activityId)) {
-            throw new AppError('Invalid activity ID', 400);
+const processActivityBodySchema = z.object({
+    forceUpdate: z.boolean().optional().default(false),
+});
+
+/**
+ * Process a specific activity
+ *
+ * POST /api/activities/process/:activityId
+ *
+ * Manually triggers weather data processing for a specific activity.
+ * This endpoint is useful for:
+ * - Reprocessing activities that failed automatic processing
+ * - Updating activities with corrected weather data
+ * - Testing weather integration
+ *
+ * @param activityId - Strava activity ID (numeric string)
+ * @body forceUpdate - Force update even if weather data exists (optional)
+ *
+ * @returns Processing result with weather data if successful
+ * @throws 400 - Invalid activity ID format
+ * @throws 401 - User not authenticated
+ * @throws 404 - Activity not found or not accessible
+ * @throws 503 - Weather service unavailable
+ */
+activitiesRouter.post(
+    '/process/:activityId',
+    authenticateUser,
+    asyncHandler(async (req: Request, res: Response, _next: NextFunction) => {
+        // Validate request parameters
+        const paramsValidation = processActivityParamsSchema.safeParse(req.params);
+        if (!paramsValidation.success) {
+            const errorMessage = paramsValidation.error.errors[0]?.message || 'Invalid request parameters';
+            throw new AppError(errorMessage, 400);
         }
 
-    if (!user) {
-        throw new AppError('User not found');
-    }
+        // Validate request body
+        const bodyValidation = processActivityBodySchema.safeParse(req.body);
+        if (!bodyValidation.success) {
+            const errorMessage = bodyValidation.error.errors[0]?.message || 'Invalid request body';
+            throw new AppError(errorMessage, 400);
+        }
 
-        console.log(`🔄 Manual processing request for activity ${activityId} by user ${user.id}`);
+        const { activityId } = paramsValidation.data;
+        const { forceUpdate } = bodyValidation.data;
+        const user = req.user;
 
-        const result = await activityProcessor.processActivity(activityId, user.id, forceUpdate);
+        if (!user) {
+            throw new AppError('User authentication required', 401);
+        }
+
+        // Log processing request
+        logger.info('Manual activity processing requested', {
+            activityId,
+            userId: user.id,
+            forceUpdate,
+            requestId: (req as any).requestId,
+        });
+
+        // Process the activity
+        const startTime = Date.now();
+        const result = await activityProcessor.processActivity(
+            activityId,
+            user.id,
+            forceUpdate
+        );
+        const processingTime = Date.now() - startTime;
+
+        // Log processing result
+        const logData = {
+            activityId,
+            userId: user.id,
+            success: result.success,
+            skipped: result.skipped,
+            reason: result.reason,
+            processingTime,
+            requestId: (req as any).requestId,
+        };
 
         if (result.success) {
+            logger.info('Activity processing completed', logData);
+
             res.json({
                 success: true,
-                message: result.skipped ? 'Activity was skipped' : 'Activity processed successfully',
+                message: getSuccessMessage(result),
                 data: {
                     activityId: result.activityId,
                     weatherData: result.weatherData,
                     skipped: result.skipped,
                     reason: result.reason,
+                    processingTime,
                 },
             });
         } else {
-            res.status(400).json({
+            logger.warn('Activity processing failed', {
+                ...logData,
+                error: result.error,
+            });
+
+            // Determine appropriate status code based on error
+            const statusCode = getErrorStatusCode(result.error);
+
+            res.status(statusCode).json({
                 success: false,
                 message: 'Failed to process activity',
-                error: result.error,
+                error: {
+                    message: result.error || 'Unknown error occurred',
+                    code: getErrorCode(result.error),
+                },
                 data: {
                     activityId: result.activityId,
                     skipped: result.skipped,
@@ -48,10 +135,71 @@ activitiesRouter.post('/process/:activityId', authenticateUser, async (req: Requ
                 },
             });
         }
+    })
+);
 
-    } catch (error) {
-        next(error);
+/**
+ * Get appropriate success message based on processing result
+ */
+function getSuccessMessage(result: any): string {
+    if (result.skipped) {
+        switch (result.reason) {
+            case 'Already has weather data':
+                return 'Activity already contains weather data';
+            case 'Weather updates disabled':
+                return 'Weather updates are currently disabled for your account';
+            case 'No GPS coordinates':
+                return 'Activity processed but no weather added (missing GPS data)';
+            default:
+                return `Activity was skipped: ${result.reason}`;
+        }
     }
-});
+    return 'Activity processed successfully with weather data';
+}
+
+/**
+ * Determine HTTP status code based on error message
+ */
+function getErrorStatusCode(error?: string): number {
+    if (!error) return 400;
+
+    const errorLower = error.toLowerCase();
+
+    if (errorLower.includes('not found') || errorLower.includes('404')) {
+        return 404;
+    }
+    if (errorLower.includes('unauthorized') || errorLower.includes('401')) {
+        return 401;
+    }
+    if (errorLower.includes('rate limit') || errorLower.includes('429')) {
+        return 429;
+    }
+    if (errorLower.includes('unavailable') || errorLower.includes('503')) {
+        return 503;
+    }
+
+    return 400; // Default to bad request
+}
+
+/**
+ * Extract error code from error message for client handling
+ */
+function getErrorCode(error?: string): string {
+    if (!error) return 'UNKNOWN_ERROR';
+
+    const errorLower = error.toLowerCase();
+
+    if (errorLower.includes('not found')) return 'ACTIVITY_NOT_FOUND';
+    if (errorLower.includes('unauthorized')) return 'UNAUTHORIZED';
+    if (errorLower.includes('rate limit')) return 'RATE_LIMITED';
+    if (errorLower.includes('weather') && errorLower.includes('unavailable')) {
+        return 'WEATHER_SERVICE_UNAVAILABLE';
+    }
+    if (errorLower.includes('strava') && errorLower.includes('unavailable')) {
+        return 'STRAVA_SERVICE_UNAVAILABLE';
+    }
+
+    return 'PROCESSING_ERROR';
+}
 
 export { activitiesRouter };
