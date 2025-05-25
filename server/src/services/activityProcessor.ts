@@ -1,6 +1,7 @@
 import {weatherService, type WeatherData} from './weatherService';
 import { stravaApiService } from './stravaApi';
 import { prisma } from '../lib';
+import {createServiceLogger} from "../utils/logger";
 
 export interface ProcessingResult {
     success: boolean;
@@ -25,6 +26,8 @@ export interface ActivityData {
     moving_time: number;
     elapsed_time: number;
 }
+
+const logger = createServiceLogger('ActivityProcessor');
 
 /**
  * Service for processing Strava activities and adding weather data
@@ -60,7 +63,11 @@ export class ActivityProcessor {
         };
 
         try {
-            log(`🔄 START processing activity ${activityId} for user ${userId}`);
+            logger.info('Processing activity', {
+                activityId,
+                userId,
+                forceUpdate
+            });
 
             // Get user's Strava tokens (encrypted)
             log('📊 Fetching user from database...');
@@ -181,13 +188,12 @@ export class ActivityProcessor {
 
         } catch (error) {
             const totalTime: number = Date.now() - startTime;
-            console.error(`❌ FAILED after ${totalTime}ms:`, {
+            logger.error('Activity processing failed', {
                 activityId,
                 userId,
-                error: error instanceof Error ? {
-                    message: error.message,
-                    stack: error.stack,
-                } : error,
+                duration: totalTime,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined
             });
 
             return {

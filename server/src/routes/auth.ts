@@ -5,6 +5,7 @@ import { prisma } from "../lib";
 import { ensureWebhooksInitialized } from "../utils/initWebhooks";
 import { stravaApiService } from '../services/stravaApi';
 import { encryptionService } from '../services/encryption';
+import {logger} from "../utils/logger";
 
 const authRouter: Router = Router();
 
@@ -12,9 +13,12 @@ const authRouter: Router = Router();
  * GET /api/auth/strava - Initiate Strava OAuth flow
  */
 authRouter.get('/strava', (req: Request, res: Response) => {
-    console.log('🚀 Starting Strava OAuth flow');
-
     const scopes = ['activity:read_all', 'activity:write', 'profile:read_all'];
+
+    logger.info('Starting Strava OAuth flow', {
+        endpoint: '/auth/strava',
+        scopes: scopes.join(',')
+    });
 
     // Generate a secure state parameter for CSRF protection
     const state = Array.from({ length: 32 }, () =>
@@ -74,7 +78,10 @@ authRouter.get('/strava/callback', async (req: Request, res: Response, next: Nex
 
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
-            console.error('❌ Token exchange failed:', errorText);
+            logger.error('Token exchange failed', {
+                error: errorText,
+                statusCode: tokenResponse.status
+            });
             return res.redirect(`${config.APP_URL}/auth/error?error=token_exchange_failed`);
         }
 

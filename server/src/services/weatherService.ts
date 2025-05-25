@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { config } from '../config/environment';
+import {createServiceLogger} from "../utils/logger";
 
 export interface WeatherData {
     temperature: number;        // Temperature in Celsius
@@ -17,6 +18,8 @@ export interface WeatherData {
     uvIndex?: number;           // UV index (optional)
     timestamp: string;          // ISO timestamp of the weather data
 }
+
+const logger = createServiceLogger('WeatherService');
 
 /**
  * Weather Service using One Call API 3.0
@@ -47,7 +50,11 @@ export class WeatherService {
             return cached;
         }
 
-        console.log(`🌤️ Fetching weather for activity ${activityId}`);
+        logger.debug('Fetching weather data', {
+            activityId,
+            coordinates: { lat, lon },
+            activityTime: activityTime.toISOString()
+        });
         console.log(`📍 Coordinates: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
         console.log(`⏰ Activity time: ${activityTime.toISOString()}`);
 

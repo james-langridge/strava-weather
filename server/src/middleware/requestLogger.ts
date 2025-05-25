@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { config } from '../config/environment';
+import {logger} from "../utils/logger";
 
 /**
  * Enhanced request logging middleware
@@ -14,46 +15,41 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     // Get client IP address
     const clientIp = getClientIp(req);
 
-    // Log incoming request
+    // Log incoming request (only if needed)
     if (config.isDevelopment || shouldLogRequest(req)) {
-        console.log(`📥 ${req.method} ${req.url}`, {
+        logger.http('Incoming request', {
             requestId,
+            method: req.method,
+            url: req.url,
             ip: clientIp,
             userAgent: req.headers['user-agent'],
             contentType: req.headers['content-type'],
-            timestamp: new Date().toISOString(),
         });
     }
 
-    // Listen for response finish event (cleaner than overriding res.end)
+    // Listen for response finish event
     res.on('finish', () => {
         const responseTime = Date.now() - startTime;
 
         // Log response details
         if (config.isDevelopment || shouldLogResponse(req, res)) {
-            const logLevel = getLogLevel(res.statusCode);
             const logData = {
                 requestId,
                 method: req.method,
                 url: req.url,
                 statusCode: res.statusCode,
-                responseTime: `${responseTime}ms`,
+                responseTime,
                 contentLength: res.get('content-length') || 0,
                 ip: clientIp,
-                timestamp: new Date().toISOString(),
             };
 
-            switch (logLevel) {
-                case 'error':
-                    console.error(`❌ ${req.method} ${req.url} - ${res.statusCode}`, logData);
-                    break;
-                case 'warn':
-                    console.warn(`⚠️ ${req.method} ${req.url} - ${res.statusCode}`, logData);
-                    break;
-                case 'info':
-                default:
-                    console.log(`📤 ${req.method} ${req.url} - ${res.statusCode}`, logData);
-                    break;
+            // Use appropriate log level based on status code
+            if (res.statusCode >= 500) {
+                logger.error('Request failed', logData);
+            } else if (res.statusCode >= 400) {
+                logger.warn('Request client error', logData);
+            } else {
+                logger.http('Request completed', logData);
             }
         }
     });
