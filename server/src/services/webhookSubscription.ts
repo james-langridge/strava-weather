@@ -1,5 +1,9 @@
 import { config } from '../config/environment';
+import { logger } from '../utils/logger';
 
+/**
+ * Strava webhook subscription interface
+ */
 export interface WebhookSubscription {
     id: number;
     callback_url: string;
@@ -8,18 +12,43 @@ export interface WebhookSubscription {
 }
 
 /**
- * Service for managing Strava webhook subscriptions
+ * Error response from Strava API
+ */
+interface StravaErrorResponse {
+    message?: string;
+    errors?: Array<{
+        resource: string;
+        field: string;
+        code: string;
+    }>;
+}
+
+/**
+ * Webhook subscription service
+ *
+ * Manages Strava webhook subscriptions for receiving real-time activity updates.
+ * Implements the Strava Push Subscription API to create, view, and delete
+ * webhook subscriptions.
+ *
+ * @see https://developers.strava.com/docs/webhooks/
  */
 export class WebhookSubscriptionService {
     private readonly subscriptionUrl = 'https://www.strava.com/api/v3/push_subscriptions';
+    private readonly serviceLogger = logger.child({ service: 'WebhookSubscription' });
 
     /**
-     * View current webhook subscription (if any)
+     * View current webhook subscription
+     *
+     * Retrieves the current webhook subscription for this application.
+     * Strava allows only one subscription per application.
+     *
+     * @returns Current subscription or null if none exists
+     * @throws Error if API request fails
      */
     async viewSubscription(): Promise<WebhookSubscription | null> {
-        try {
-            console.log('🔍 Checking for existing webhook subscription...');
+        this.serviceLogger.debug('Checking for existing webhook subscription');
 
+        try {
             const url = new URL(this.subscriptionUrl);
             url.searchParams.set('client_id', config.STRAVA_CLIENT_ID);
             url.searchParams.set('client_secret', config.STRAVA_CLIENT_SECRET);
@@ -33,39 +62,68 @@ export class WebhookSubscriptionService {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Failed to view subscription: ${response.status} ${errorText}`);
+                this.serviceLogger.error('Failed to retrieve webhook subscription', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: errorText,
+                });
+                throw new Error(`Failed to view subscription: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
 
             // Strava returns an array of subscriptions
             if (Array.isArray(data) && data.length > 0) {
-                console.log('✅ Found existing subscription:', data[0]);
-                return data[0];
+                const subscription = data[0];
+                this.serviceLogger.info('Found existing webhook subscription', {
+                    subscriptionId: subscription.id,
+                    callbackUrl: subscription.callback_url,
+                    createdAt: subscription.created_at,
+                });
+                return subscription;
             }
 
-            console.log('ℹ️ No existing webhook subscription found');
+            this.serviceLogger.debug('No existing webhook subscription found');
             return null;
 
         } catch (error) {
-            console.error('❌ Failed to view webhook subscription:', error);
+            this.serviceLogger.error('Error retrieving webhook subscription', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             throw error;
         }
     }
 
     /**
      * Create a new webhook subscription
+     *
+     * Creates a webhook subscription to receive Strava activity events.
+     * Only one subscription is allowed per application - existing subscriptions
+     * must be deleted before creating a new one.
+     *
+     * @param callbackUrl - Public HTTPS URL to receive webhook events
+     * @returns Created subscription details
+     * @throws Error if subscription already exists or creation fails
      */
     async createSubscription(callbackUrl: string): Promise<WebhookSubscription> {
-        try {
-            console.log('🚀 Creating webhook subscription...');
-            console.log(`📍 Callback URL: ${callbackUrl}`);
+        this.serviceLogger.info('Creating webhook subscription', { callbackUrl });
 
-            // First, check if a subscription already exists
+        try {
+            // Verify no existing subscription
             const existing = await this.viewSubscription();
             if (existing) {
-                console.log('⚠️ Subscription already exists. Delete it first before creating a new one.');
+                this.serviceLogger.warn('Cannot create subscription: one already exists', {
+                    existingId: existing.id,
+                    existingUrl: existing.callback_url,
+                });
                 throw new Error('Subscription already exists. Delete existing subscription first.');
+            }
+
+            // Validate callback URL
+            if (!callbackUrl.startsWith('https://')) {
+                this.serviceLogger.error('Invalid callback URL: must use HTTPS', { callbackUrl });
+                throw new Error('Callback URL must use HTTPS protocol');
             }
 
             const formData = new URLSearchParams({
@@ -85,27 +143,59 @@ export class WebhookSubscriptionService {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Failed to create subscription: ${response.status} ${errorText}`);
+                let errorMessage = `${response.status} ${response.statusText}`;
+
+                try {
+                    const errorData: StravaErrorResponse = JSON.parse(errorText);
+                    if (errorData.message) {
+                        errorMessage = errorData.message;
+                    }
+                } catch {
+                    // Use raw error text if not JSON
+                    errorMessage = errorText || errorMessage;
+                }
+
+                this.serviceLogger.error('Failed to create webhook subscription', {
+                    status: response.status,
+                    error: errorMessage,
+                    callbackUrl,
+                });
+
+                throw new Error(`Failed to create subscription: ${errorMessage}`);
             }
 
             const subscription = await response.json();
-            console.log('✅ Webhook subscription created successfully:', subscription);
+
+            this.serviceLogger.info('Webhook subscription created successfully', {
+                subscriptionId: subscription.id,
+                callbackUrl: subscription.callback_url,
+                createdAt: subscription.created_at,
+            });
 
             return subscription;
 
         } catch (error) {
-            console.error('❌ Failed to create webhook subscription:', error);
+            this.serviceLogger.error('Error creating webhook subscription', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+                callbackUrl,
+            });
             throw error;
         }
     }
 
     /**
      * Delete a webhook subscription
+     *
+     * Removes the webhook subscription, stopping all webhook events.
+     *
+     * @param subscriptionId - ID of subscription to delete
+     * @throws Error if deletion fails
      */
     async deleteSubscription(subscriptionId: number): Promise<void> {
-        try {
-            console.log(`🗑️ Deleting webhook subscription ${subscriptionId}...`);
+        this.serviceLogger.info('Deleting webhook subscription', { subscriptionId });
 
+        try {
             const url = `${this.subscriptionUrl}/${subscriptionId}`;
             const params = new URLSearchParams({
                 client_id: config.STRAVA_CLIENT_ID,
@@ -116,61 +206,93 @@ export class WebhookSubscriptionService {
                 method: 'DELETE',
             });
 
+            // 204 No Content is success for DELETE
             if (response.status === 204) {
-                console.log('✅ Webhook subscription deleted successfully');
+                this.serviceLogger.info('Webhook subscription deleted successfully', { subscriptionId });
                 return;
             }
 
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`Failed to delete subscription: ${response.status} ${errorText}`);
+                this.serviceLogger.error('Failed to delete webhook subscription', {
+                    subscriptionId,
+                    status: response.status,
+                    error: errorText,
+                });
+                throw new Error(`Failed to delete subscription: ${response.status} ${response.statusText}`);
             }
 
         } catch (error) {
-            console.error('❌ Failed to delete webhook subscription:', error);
+            this.serviceLogger.error('Error deleting webhook subscription', {
+                subscriptionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             throw error;
         }
     }
 
     /**
-     * Verify webhook endpoint is accessible
+     * Verify webhook endpoint accessibility
+     *
+     * Tests if the webhook callback URL is publicly accessible and
+     * correctly implements the Strava webhook verification protocol.
+     *
+     * @param callbackUrl - URL to verify
+     * @returns True if endpoint is accessible and responds correctly
      */
     async verifyEndpoint(callbackUrl: string): Promise<boolean> {
-        try {
-            console.log('🔍 Verifying webhook endpoint accessibility...');
+        this.serviceLogger.debug('Verifying webhook endpoint accessibility', { callbackUrl });
 
+        const testChallenge = `test_challenge_${Date.now()}`;
+
+        try {
             const testUrl = new URL(callbackUrl);
             testUrl.searchParams.set('hub.mode', 'subscribe');
             testUrl.searchParams.set('hub.verify_token', config.STRAVA_WEBHOOK_VERIFY_TOKEN);
-            testUrl.searchParams.set('hub.challenge', 'test_challenge_123');
+            testUrl.searchParams.set('hub.challenge', testChallenge);
 
             const response = await fetch(testUrl.toString(), {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
                 },
+                // Short timeout for verification
+                signal: AbortSignal.timeout(5000),
             });
 
             if (!response.ok) {
-                console.error(`❌ Webhook endpoint returned ${response.status}`);
+                this.serviceLogger.warn('Webhook endpoint returned non-OK status', {
+                    callbackUrl,
+                    status: response.status,
+                    statusText: response.statusText,
+                });
                 return false;
             }
 
             const data = await response.json();
 
-            if (data['hub.challenge'] === 'test_challenge_123') {
-                console.log('✅ Webhook endpoint verified successfully');
+            if (data['hub.challenge'] === testChallenge) {
+                this.serviceLogger.info('Webhook endpoint verified successfully', { callbackUrl });
                 return true;
             }
 
-            console.error('❌ Webhook endpoint did not return expected challenge');
+            this.serviceLogger.warn('Webhook endpoint returned incorrect challenge', {
+                callbackUrl,
+                expected: testChallenge,
+                received: data['hub.challenge'],
+            });
             return false;
 
         } catch (error) {
-            console.error('❌ Failed to verify webhook endpoint:', error);
+            this.serviceLogger.error('Failed to verify webhook endpoint', {
+                callbackUrl,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             return false;
         }
     }
 }
 
+// Export singleton instance
 export const webhookSubscriptionService = new WebhookSubscriptionService();
