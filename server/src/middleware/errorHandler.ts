@@ -1,9 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { config } from '../config/environment';
+import { logger } from '../utils/logger';
 
 /**
  * Custom application error class
+ *
+ * Provides a standardized error structure with additional metadata
+ * for consistent error handling across the application.
  */
 export class AppError extends Error {
     public readonly statusCode: number;
@@ -22,110 +26,177 @@ export class AppError extends Error {
         this.isOperational = isOperational;
         this.timestamp = new Date().toISOString();
 
-        // Capture stack trace
+        // Maintain proper stack trace for debugging
         Error.captureStackTrace(this, this.constructor);
     }
 }
 
 /**
- * Handle Zod validation errors
+ * Error code mappings for common HTTP scenarios
+ */
+const ERROR_CODES = {
+    VALIDATION_ERROR: 400,
+    UNAUTHORIZED: 401,
+    FORBIDDEN: 403,
+    NOT_FOUND: 404,
+    CONFLICT: 409,
+    RATE_LIMITED: 429,
+    INTERNAL_ERROR: 500,
+    SERVICE_UNAVAILABLE: 503,
+} as const;
+
+/**
+ * Transform Zod validation errors into AppError
  */
 function handleZodError(error: ZodError): AppError {
-    const messages = error.issues.map(issue =>
-        `${issue.path.join('.')}: ${issue.message}`
-    );
+    const messages = error.issues.map(issue => {
+        const path = issue.path.length > 0 ? issue.path.join('.') : 'request';
+        return `${path}: ${issue.message}`;
+    });
 
     return new AppError(
-        `Validation failed: ${messages.join(', ')}`,
-        400
+        `Validation failed: ${messages.join('; ')}`,
+        ERROR_CODES.VALIDATION_ERROR
     );
 }
 
 /**
- * Handle Prisma errors
+ * Transform Prisma database errors into AppError
+ *
+ * @see https://www.prisma.io/docs/reference/api-reference/error-reference
  */
 function handlePrismaError(error: any): AppError {
-    switch (error.code) {
-        case 'P2002':
-            return new AppError('Duplicate entry. Resource already exists.', 409);
+    const errorMap: Record<string, { message: string; status: number }> = {
+        P2002: {
+            message: 'A unique constraint violation occurred. This record already exists.',
+            status: ERROR_CODES.CONFLICT
+        },
+        P2025: {
+            message: 'The requested record was not found.',
+            status: ERROR_CODES.NOT_FOUND
+        },
+        P2003: {
+            message: 'Foreign key constraint failed. Related record does not exist.',
+            status: ERROR_CODES.VALIDATION_ERROR
+        },
+        P2014: {
+            message: 'The provided data violates a database constraint.',
+            status: ERROR_CODES.VALIDATION_ERROR
+        },
+        P2024: {
+            message: 'Connection to the database timed out.',
+            status: ERROR_CODES.SERVICE_UNAVAILABLE
+        },
+    };
 
-        case 'P2025':
-            return new AppError('Record not found.', 404);
+    const errorInfo = errorMap[error.code];
 
-        case 'P2003':
-            return new AppError('Foreign key constraint failed.', 400);
-
-        case 'P2014':
-            return new AppError('Invalid data provided.', 400);
-
-        default:
-            return new AppError('Database operation failed.', 500);
+    if (errorInfo) {
+        return new AppError(errorInfo.message, errorInfo.status);
     }
+
+    // Log unknown Prisma errors for investigation
+    logger.warn('Unknown Prisma error code', { code: error.code, message: error.message });
+    return new AppError('Database operation failed.', ERROR_CODES.INTERNAL_ERROR);
 }
 
 /**
- * Handle Strava API errors
+ * Transform external API errors into AppError
  */
-function handleStravaError(error: any): AppError {
-    if (error.response?.status === 401) {
-        return new AppError('Strava authentication failed. Please reconnect your account.', 401);
+function handleExternalApiError(error: any, serviceName: string): AppError {
+    const status = error.response?.status;
+
+    if (status === 401) {
+        return new AppError(
+            `Authentication with ${serviceName} failed. Please reconnect your account.`,
+            ERROR_CODES.UNAUTHORIZED
+        );
     }
 
-    if (error.response?.status === 403) {
-        return new AppError('Insufficient permissions for Strava API operation.', 403);
+    if (status === 403) {
+        return new AppError(
+            `Insufficient permissions for ${serviceName} operation.`,
+            ERROR_CODES.FORBIDDEN
+        );
     }
 
-    if (error.response?.status === 429) {
-        return new AppError('Strava API rate limit exceeded. Please try again later.', 429);
+    if (status === 429) {
+        const retryAfter = error.response?.headers?.['retry-after'];
+        const message = retryAfter
+            ? `${serviceName} rate limit exceeded. Retry after ${retryAfter} seconds.`
+            : `${serviceName} rate limit exceeded. Please try again later.`;
+        return new AppError(message, ERROR_CODES.RATE_LIMITED);
     }
 
-    if (error.response?.status >= 400 && error.response?.status < 500) {
-        return new AppError('Invalid request to Strava API.', 400);
+    if (status >= 400 && status < 500) {
+        return new AppError(
+            `Invalid request to ${serviceName}.`,
+            ERROR_CODES.VALIDATION_ERROR
+        );
     }
 
-    return new AppError('Strava API is temporarily unavailable.', 503);
+    if (status >= 500) {
+        return new AppError(
+            `${serviceName} is experiencing issues. Please try again later.`,
+            ERROR_CODES.SERVICE_UNAVAILABLE
+        );
+    }
+
+    return new AppError(
+        `Failed to communicate with ${serviceName}.`,
+        ERROR_CODES.SERVICE_UNAVAILABLE
+    );
 }
 
 /**
- * Main error handling middleware
+ * Central error handling middleware
+ *
+ * Transforms various error types into standardized responses
+ * and ensures consistent error logging and client responses.
  */
 export function errorHandler(
     error: Error,
     req: Request,
     res: Response,
-    next: NextFunction
+    _next: NextFunction
 ): void {
     let appError: AppError;
 
-    // Convert known error types to AppError
+    // Transform error to AppError based on type
     if (error instanceof AppError) {
         appError = error;
     } else if (error instanceof ZodError) {
         appError = handleZodError(error);
     } else if (error.name === 'PrismaClientKnownRequestError') {
         appError = handlePrismaError(error);
-    } else if (error.message?.includes('strava') || error.message?.includes('Strava')) {
-        appError = handleStravaError(error);
+    } else if (error.message?.toLowerCase().includes('strava')) {
+        appError = handleExternalApiError(error, 'Strava');
+    } else if (error.message?.toLowerCase().includes('openweathermap')) {
+        appError = handleExternalApiError(error, 'OpenWeatherMap');
     } else {
-        // Generic error
+        // Generic errors
         appError = new AppError(
-            config.isProduction ? 'Something went wrong.' : error.message,
-            500,
+            config.isProduction ? 'An unexpected error occurred.' : error.message,
+            ERROR_CODES.INTERNAL_ERROR,
             false
         );
     }
 
-    // Log error details
-    console.error('🚨 Error occurred:', {
+    // Log error with appropriate level
+    const logLevel = appError.statusCode >= 500 ? 'error' : 'warn';
+    const logData = {
         timestamp: appError.timestamp,
         method: req.method,
         url: req.url,
         statusCode: appError.statusCode,
         message: appError.message,
-        stack: config.isDevelopment ? appError.stack : undefined,
+        isOperational: appError.isOperational,
         userId: (req as any).user?.id,
         requestId: (req as any).requestId,
-    });
+        ...(config.isDevelopment && { stack: appError.stack }),
+    };
+
+    logger[logLevel]('Request error', logData);
 
     // Send error response
     const errorResponse = {
@@ -133,9 +204,10 @@ export function errorHandler(
             message: appError.message,
             statusCode: appError.statusCode,
             timestamp: appError.timestamp,
+            requestId: (req as any).requestId,
             ...(config.isDevelopment && {
                 stack: appError.stack,
-                details: error,
+                originalError: error.message,
             }),
         },
     };
@@ -144,46 +216,70 @@ export function errorHandler(
 }
 
 /**
- * Handle unhandled promise rejections
+ * Global error handlers
+ *
+ * These handlers catch errors that escape the Express error handling
+ * middleware and prevent the application from crashing unexpectedly.
  */
-process.on('unhandledRejection', (reason: unknown, promise: Promise<any>) => {
-    console.error('🚨 Unhandled Promise Rejection:', reason);
-    console.error('Promise:', promise);
 
-    // In production, we might want to exit gracefully
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: unknown, promise: Promise<any>) => {
+    logger.error('Unhandled promise rejection', {
+        reason: reason instanceof Error ? reason.message : reason,
+        stack: reason instanceof Error ? reason.stack : undefined,
+        promise: String(promise),
+    });
+
+    // In production, exit gracefully to trigger container restart
     if (config.isProduction) {
-        console.error('🛑 Shutting down due to unhandled promise rejection...');
+        logger.error('Initiating graceful shutdown due to unhandled rejection');
         process.exit(1);
     }
 });
 
-/**
- * Handle uncaught exceptions
- */
+// Handle uncaught exceptions
 process.on('uncaughtException', (error: Error) => {
-    console.error('🚨 Uncaught Exception:', error);
+    logger.error('Uncaught exception', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+    });
 
-    // Always exit on uncaught exceptions
-    console.error('🛑 Shutting down due to uncaught exception...');
+    // Always exit on uncaught exceptions as the process is in an undefined state
+    logger.error('Initiating immediate shutdown due to uncaught exception');
     process.exit(1);
 });
 
 /**
- * Async wrapper for route handlers
- * Catches async errors and passes them to error middleware
+ * Async route handler wrapper
+ *
+ * Wraps async route handlers to automatically catch rejected promises
+ * and forward them to the error handling middleware.
+ *
+ * @example
+ * router.get('/users/:id', asyncHandler(async (req, res) => {
+ *   const user = await getUserById(req.params.id);
+ *   res.json(user);
+ * }));
  */
 export function asyncHandler<T extends Request, U extends Response>(
     fn: (req: T, res: U, next: NextFunction) => Promise<any>
 ) {
-    return (req: T, res: U, next: NextFunction) => {
+    return (req: T, res: U, next: NextFunction): void => {
         Promise.resolve(fn(req, res, next)).catch(next);
     };
 }
 
 /**
  * 404 Not Found handler
+ *
+ * Catches requests to undefined routes and returns a standardized error.
+ * Should be registered after all other routes.
  */
 export function notFoundHandler(req: Request, res: Response, next: NextFunction): void {
-    const error = new AppError(`Route ${req.originalUrl} not found`, 404);
+    const error = new AppError(
+        `The requested resource ${req.originalUrl} was not found.`,
+        ERROR_CODES.NOT_FOUND
+    );
     next(error);
 }
