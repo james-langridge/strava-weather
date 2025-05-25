@@ -1,6 +1,12 @@
-import {config} from '../config/environment';
+import { config } from '../config/environment';
 import { encryptionService } from './encryption';
+import { logger } from '../utils/logger';
 
+/**
+ * Strava activity interface
+ *
+ * Represents a complete activity object from the Strava API
+ */
 export interface StravaActivity {
     id: number;
     name: string;
@@ -27,6 +33,11 @@ export interface StravaActivity {
     visibility: string;
 }
 
+/**
+ * Activity update data interface
+ *
+ * Fields that can be updated on a Strava activity
+ */
 export interface StravaUpdateData {
     name?: string;
     type?: string;
@@ -37,19 +48,47 @@ export interface StravaUpdateData {
 }
 
 /**
- * Service for interacting with Strava API
+ * Token refresh response interface
+ */
+interface TokenRefreshResponse {
+    access_token: string;
+    refresh_token: string;
+    expires_at: number;
+    expires_in: number;
+    token_type: string;
+}
+
+/**
+ * Strava API service
+ *
+ * Handles all interactions with the Strava API including:
+ * - Activity retrieval and updates
+ * - Token management and refresh
+ * - Secure token encryption/decryption
+ *
+ * All tokens are stored and passed encrypted, with decryption
+ * happening only when needed for API calls.
  */
 export class StravaApiService {
     private readonly baseUrl = 'https://www.strava.com/api/v3';
+    private readonly tokenRefreshBuffer = 5 * 60 * 1000; // 5 minutes in ms
+    private readonly serviceLogger = logger.child({ service: 'StravaAPI' });
 
     /**
-     * Get specific activity by ID
+     * Retrieve a specific activity from Strava
+     *
+     * @param activityId - Strava activity ID
+     * @param encryptedAccessToken - Encrypted access token
+     * @returns Complete activity data
+     * @throws Error for invalid tokens, missing activities, or API errors
      */
     async getActivity(activityId: string, encryptedAccessToken: string): Promise<StravaActivity> {
-        try {
-            console.log(`🏃 Fetching activity ${activityId} from Strava`);
+        const logContext = { activityId };
 
-            // Decrypt the access token
+        this.serviceLogger.debug('Fetching activity from Strava', logContext);
+
+        try {
+            // Decrypt the access token for API use
             const accessToken = encryptionService.decrypt(encryptedAccessToken);
 
             const response = await fetch(`${this.baseUrl}/activities/${activityId}`, {
@@ -60,40 +99,54 @@ export class StravaApiService {
             });
 
             if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Strava access token expired or invalid');
-                }
-                if (response.status === 404) {
-                    throw new Error('Activity not found or not accessible');
-                }
-                const errorText = await response.text();
-                throw new Error(`Strava API error (${response.status}): ${errorText}`);
+                await this.handleApiError(response, 'getActivity', logContext);
             }
 
             const activity: StravaActivity = await response.json();
 
-            console.log(`✅ Activity retrieved: ${activity.name} (${activity.type})`);
+            this.serviceLogger.info('Activity retrieved successfully', {
+                ...logContext,
+                activityName: activity.name,
+                activityType: activity.type,
+                distance: activity.distance,
+                duration: activity.moving_time,
+            });
 
             return activity;
 
         } catch (error) {
-            console.error(`Failed to fetch activity ${activityId}:`, error);
+            this.serviceLogger.error('Failed to fetch activity', {
+                ...logContext,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             throw error;
         }
     }
 
     /**
      * Update an activity on Strava
+     *
+     * @param activityId - Strava activity ID to update
+     * @param encryptedAccessToken - Encrypted access token
+     * @param updateData - Fields to update
+     * @returns Updated activity data
+     * @throws Error for authorization failures or API errors
      */
     async updateActivity(
         activityId: string,
         encryptedAccessToken: string,
         updateData: StravaUpdateData
     ): Promise<StravaActivity> {
-        try {
-            console.log(`🔄 Updating activity ${activityId} on Strava`);
+        const logContext = {
+            activityId,
+            updateFields: Object.keys(updateData),
+        };
 
-            // Decrypt the access token
+        this.serviceLogger.debug('Updating activity on Strava', logContext);
+
+        try {
+            // Decrypt the access token for API use
             const accessToken = encryptionService.decrypt(encryptedAccessToken);
 
             const response = await fetch(`${this.baseUrl}/activities/${activityId}`, {
@@ -106,66 +159,78 @@ export class StravaApiService {
             });
 
             if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error('Strava access token expired or invalid');
-                }
-                if (response.status === 404) {
-                    throw new Error('Activity not found or not accessible');
-                }
-                if (response.status === 403) {
-                    throw new Error('Not authorized to update this activity');
-                }
-                const errorText = await response.text();
-                throw new Error(`Strava API error (${response.status}): ${errorText}`);
+                await this.handleApiError(response, 'updateActivity', logContext);
             }
 
             const updatedActivity: StravaActivity = await response.json();
 
-            console.log(`✅ Activity ${activityId} updated successfully`);
+            this.serviceLogger.info('Activity updated successfully', {
+                ...logContext,
+                activityName: updatedActivity.name,
+            });
 
             return updatedActivity;
 
         } catch (error) {
-            console.error(`Failed to update activity ${activityId}:`, error);
+            this.serviceLogger.error('Failed to update activity', {
+                ...logContext,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             throw error;
         }
     }
 
     /**
      * Refresh an expired access token
+     *
+     * Exchanges a refresh token for new access and refresh tokens.
+     *
+     * @param encryptedRefreshToken - Encrypted refresh token
+     * @returns New token data with expiration
+     * @throws Error if refresh fails
      */
     async refreshAccessToken(encryptedRefreshToken: string): Promise<{
         access_token: string;
         refresh_token: string;
         expires_at: number;
     }> {
-        try {
-            console.log('🔄 Refreshing Strava access token');
+        this.serviceLogger.debug('Refreshing Strava access token');
 
-            // Decrypt the refresh token
+        try {
+            // Decrypt the refresh token for API use
             const refreshToken = encryptionService.decrypt(encryptedRefreshToken);
+
+            const requestBody = {
+                client_id: config.STRAVA_CLIENT_ID,
+                client_secret: config.STRAVA_CLIENT_SECRET,
+                refresh_token: refreshToken,
+                grant_type: 'refresh_token',
+            };
 
             const response = await fetch(config.api.strava.tokenUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    client_id: config.STRAVA_CLIENT_ID,
-                    client_secret: config.STRAVA_CLIENT_SECRET,
-                    refresh_token: refreshToken,
-                    grant_type: 'refresh_token',
-                }),
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
+                this.serviceLogger.error('Token refresh failed', {
+                    status: response.status,
+                    error: errorText,
+                });
                 throw new Error(`Token refresh failed (${response.status}): ${errorText}`);
             }
 
-            const tokenData = await response.json();
+            const tokenData: TokenRefreshResponse = await response.json();
 
-            console.log('✅ Access token refreshed successfully');
+            this.serviceLogger.info('Access token refreshed successfully', {
+                expiresAt: new Date(tokenData.expires_at * 1000).toISOString(),
+                expiresIn: tokenData.expires_in,
+            });
 
             return {
                 access_token: tokenData.access_token,
@@ -174,14 +239,24 @@ export class StravaApiService {
             };
 
         } catch (error) {
-            console.error('Failed to refresh access token:', error);
+            this.serviceLogger.error('Failed to refresh access token', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             throw error;
         }
     }
 
     /**
-     * Check if access token needs refresh and refresh if necessary
-     * Returns encrypted tokens
+     * Ensure access token is valid, refreshing if necessary
+     *
+     * Checks token expiration and refreshes if it expires within 5 minutes.
+     * Returns encrypted tokens for secure storage.
+     *
+     * @param encryptedAccessToken - Current encrypted access token
+     * @param encryptedRefreshToken - Current encrypted refresh token
+     * @param expiresAt - Token expiration date
+     * @returns Token data (encrypted) with refresh status
      */
     async ensureValidToken(
         encryptedAccessToken: string,
@@ -194,15 +269,20 @@ export class StravaApiService {
         wasRefreshed: boolean;
     }> {
         const now = new Date();
-        const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+        const bufferTime = new Date(now.getTime() + this.tokenRefreshBuffer);
 
-        // If token expires within 5 minutes, refresh it
-        if (expiresAt <= fiveMinutesFromNow) {
-            console.log('🔄 Access token expires soon, refreshing...');
+        // Check if token needs refresh
+        if (expiresAt <= bufferTime) {
+            const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+
+            this.serviceLogger.info('Access token expiring soon, refreshing', {
+                expiresAt: expiresAt.toISOString(),
+                timeUntilExpiryMs: timeUntilExpiry,
+            });
 
             const tokenData = await this.refreshAccessToken(encryptedRefreshToken);
 
-            // Encrypt the new tokens before returning
+            // Encrypt new tokens before returning
             return {
                 accessToken: encryptionService.encrypt(tokenData.access_token),
                 refreshToken: encryptionService.encrypt(tokenData.refresh_token),
@@ -210,6 +290,11 @@ export class StravaApiService {
                 wasRefreshed: true,
             };
         }
+
+        this.serviceLogger.debug('Access token still valid', {
+            expiresAt: expiresAt.toISOString(),
+            timeUntilExpiryMs: expiresAt.getTime() - now.getTime(),
+        });
 
         return {
             accessToken: encryptedAccessToken,
@@ -220,13 +305,18 @@ export class StravaApiService {
     }
 
     /**
-     * Revoke access token
+     * Revoke access token (deauthorize)
+     *
+     * Revokes the access token with Strava, effectively logging out.
+     * Failures are logged but not thrown to prevent logout issues.
+     *
+     * @param encryptedAccessToken - Encrypted access token to revoke
      */
     async revokeToken(encryptedAccessToken: string): Promise<void> {
-        try {
-            console.log('🔐 Revoking Strava access token');
+        this.serviceLogger.debug('Revoking Strava access token');
 
-            // Decrypt the access token
+        try {
+            // Decrypt the access token for API use
             const accessToken = encryptionService.decrypt(encryptedAccessToken);
 
             const response = await fetch('https://www.strava.com/oauth/deauthorize', {
@@ -238,16 +328,65 @@ export class StravaApiService {
             });
 
             if (!response.ok) {
-                console.warn(`Token revocation returned ${response.status}, but continuing...`);
+                this.serviceLogger.warn('Token revocation returned non-OK status', {
+                    status: response.status,
+                    statusText: response.statusText,
+                });
             } else {
-                console.log('✅ Access token revoked successfully');
+                this.serviceLogger.info('Access token revoked successfully');
             }
 
         } catch (error) {
-            console.warn('Failed to revoke access token:', error);
             // Don't throw - revocation failure shouldn't prevent logout
+            this.serviceLogger.warn('Failed to revoke access token', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
         }
+    }
+
+    /**
+     * Handle API error responses
+     *
+     * @param response - Fetch response object
+     * @param operation - Operation that failed
+     * @param context - Additional context for logging
+     * @throws Error with appropriate message based on status code
+     */
+    private async handleApiError(
+        response: Response,
+        operation: string,
+        context: Record<string, any>
+    ): Promise<never> {
+        const errorText = await response.text();
+        let errorMessage = `Strava API error (${response.status})`;
+
+        switch (response.status) {
+            case 401:
+                errorMessage = 'Strava access token expired or invalid';
+                break;
+            case 403:
+                errorMessage = 'Not authorized to perform this action';
+                break;
+            case 404:
+                errorMessage = 'Resource not found or not accessible';
+                break;
+            case 429:
+                errorMessage = 'Rate limit exceeded';
+                break;
+            default:
+                errorMessage = `${errorMessage}: ${errorText}`;
+        }
+
+        this.serviceLogger.error(`${operation} failed`, {
+            ...context,
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+        });
+
+        throw new Error(errorMessage);
     }
 }
 
+// Export singleton instance
 export const stravaApiService = new StravaApiService();
