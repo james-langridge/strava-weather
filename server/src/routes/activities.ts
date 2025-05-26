@@ -14,14 +14,10 @@ import { logger } from '../utils/logger';
 const activitiesRouter = Router();
 
 /**
- * Request validation schemas
+ * Request validation schema
  */
 const processActivityParamsSchema = z.object({
     activityId: z.string().regex(/^\d+$/, 'Activity ID must be numeric'),
-});
-
-const processActivityBodySchema = z.object({
-    forceUpdate: z.boolean().optional().default(false),
 });
 
 /**
@@ -31,12 +27,13 @@ const processActivityBodySchema = z.object({
  *
  * Manually triggers weather data processing for a specific activity.
  * This endpoint is useful for:
+ * - Processing activities that don't have weather data yet
  * - Reprocessing activities that failed automatic processing
- * - Updating activities with corrected weather data
  * - Testing weather integration
  *
+ * Note: Activities that already have weather data will be skipped.
+ *
  * @param activityId - Strava activity ID (numeric string)
- * @body forceUpdate - Force update even if weather data exists (optional)
  *
  * @returns Processing result with weather data if successful
  * @throws 400 - Invalid activity ID format
@@ -55,15 +52,7 @@ activitiesRouter.post(
             throw new AppError(errorMessage, 400);
         }
 
-        // Validate request body
-        const bodyValidation = processActivityBodySchema.safeParse(req.body);
-        if (!bodyValidation.success) {
-            const errorMessage = bodyValidation.error.errors[0]?.message || 'Invalid request body';
-            throw new AppError(errorMessage, 400);
-        }
-
         const { activityId } = paramsValidation.data;
-        const { forceUpdate } = bodyValidation.data;
         const user = req.user;
 
         if (!user) {
@@ -74,7 +63,6 @@ activitiesRouter.post(
         logger.info('Manual activity processing requested', {
             activityId,
             userId: user.id,
-            forceUpdate,
             requestId: (req as any).requestId,
         });
 
@@ -82,8 +70,7 @@ activitiesRouter.post(
         const startTime = Date.now();
         const result = await activityProcessor.processActivity(
             activityId,
-            user.id,
-            forceUpdate
+            user.id
         );
         const processingTime = Date.now() - startTime;
 
