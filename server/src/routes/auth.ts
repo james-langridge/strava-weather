@@ -250,7 +250,8 @@ authRouter.post('/logout', (req: Request, res: Response) => {
  *
  * GET /api/auth/check
  *
- * Verifies if the current session is valid by checking the JWT cookie.
+ * Verifies if the current session is valid by checking the JWT cookie
+ * and ensuring the user still exists in the database.
  * Used by the frontend to determine authentication state.
  *
  * @returns Authentication status and user info if authenticated
@@ -264,7 +265,7 @@ authRouter.get('/check', asyncHandler(async (req: Request, res: Response, _next:
         });
 
         res.json({
-            success: false,
+            success: true,
             data: {
                 authenticated: false,
             }
@@ -275,7 +276,33 @@ authRouter.get('/check', asyncHandler(async (req: Request, res: Response, _next:
     try {
         const decoded = verifyJWT(token);
 
-        logger.debug('Authentication check: valid token', {
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.userId },
+            select: {
+                id: true,
+                stravaAthleteId: true,
+            }
+        });
+
+        if (!user) {
+            logger.warn('Authentication check: user not found in database', {
+                userId: decoded.userId,
+                requestId: (req as any).requestId,
+            });
+
+            // Clear the invalid cookie
+            clearAuthCookie(res);
+
+            res.json({
+                success: true,
+                data: {
+                    authenticated: false,
+                }
+            });
+            return;
+        }
+
+        logger.debug('Authentication check: valid token and user exists', {
             userId: decoded.userId,
             requestId: (req as any).requestId,
         });
@@ -285,8 +312,8 @@ authRouter.get('/check', asyncHandler(async (req: Request, res: Response, _next:
             data: {
                 authenticated: true,
                 user: {
-                    id: decoded.userId,
-                    stravaAthleteId: decoded.stravaAthleteId,
+                    id: user.id,
+                    stravaAthleteId: user.stravaAthleteId,
                 },
             }
         });
@@ -296,8 +323,11 @@ authRouter.get('/check', asyncHandler(async (req: Request, res: Response, _next:
             requestId: (req as any).requestId,
         });
 
+        // Clear invalid cookie
+        clearAuthCookie(res);
+
         res.json({
-            success: false,
+            success: true,
             data: {
                 authenticated: false,
             }
