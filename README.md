@@ -17,7 +17,7 @@ Deploy the entire app with one click:
 
 ## Prerequisites
 
-Before deploying, you'll need:
+Before deploying, you'll need:test
 - Vercel account (free tier works)
 - Strava API app credentials
 - OpenWeatherMap API key (with One Call API 3.0)
