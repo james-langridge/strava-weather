@@ -5,6 +5,7 @@ Automatically add weather data to your Strava activities! This app uses webhooks
 ## Overview
 
 This is a full-stack application that automatically adds weather data to your Strava activities:
+
 - **Backend**: Express.js API handling Strava OAuth, webhooks, and weather data
 - **Frontend**: React SPA for user authentication and settings management
 - **Deployment**: Single Vercel deployment serving both frontend and API
@@ -18,6 +19,7 @@ Deploy the entire app with one click:
 ## Prerequisites
 
 Before deploying, you'll need:test
+
 - Vercel account (free tier works)
 - Strava API app credentials
 - OpenWeatherMap API key (with One Call API 3.0)
@@ -112,17 +114,17 @@ ENCRYPTION_KEY=generate_another_long_random_string_32_chars
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `APP_URL` | Your app URL (production) or http://localhost:5173 (dev) | ✅ |
-| `DATABASE_URL` | PostgreSQL connection string | ✅ |
-| `STRAVA_CLIENT_ID` | From your Strava app | ✅ |
-| `STRAVA_CLIENT_SECRET` | From your Strava app | ✅ |
-| `STRAVA_WEBHOOK_VERIFY_TOKEN` | Random string for webhook security | ✅ |
-| `OPENWEATHERMAP_API_KEY` | From OpenWeatherMap | ✅ |
-| `JWT_SECRET` | Random 32+ character string | ✅ |
-| `ENCRYPTION_KEY` | Random 32+ character string | ✅ |
-| `ADMIN_TOKEN` | For admin endpoints (optional) | ➖ |
+| Variable                      | Description                                              | Required |
+| ----------------------------- | -------------------------------------------------------- | -------- |
+| `APP_URL`                     | Your app URL (production) or http://localhost:5173 (dev) | ✅       |
+| `DATABASE_URL`                | PostgreSQL connection string                             | ✅       |
+| `STRAVA_CLIENT_ID`            | From your Strava app                                     | ✅       |
+| `STRAVA_CLIENT_SECRET`        | From your Strava app                                     | ✅       |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN` | Random string for webhook security                       | ✅       |
+| `OPENWEATHERMAP_API_KEY`      | From OpenWeatherMap                                      | ✅       |
+| `JWT_SECRET`                  | Random 32+ character string                              | ✅       |
+| `ENCRYPTION_KEY`              | Random 32+ character string                              | ✅       |
+| `ADMIN_TOKEN`                 | For admin endpoints (optional)                           | ➖       |
 
 ## Local Development
 
@@ -148,6 +150,7 @@ npm run dev          # Both frontend and backend
 ```
 
 The development setup runs:
+
 - Frontend: `http://localhost:5173` (Vite dev server)
 - Backend: `http://localhost:3001` (Express server)
 
@@ -211,21 +214,25 @@ strava-weather/
 ## Troubleshooting
 
 ### Webhook Issues
+
 - Check Vercel function logs for webhook events
 - Verify webhook is registered: `GET /api/admin/webhook/status`
 - Ensure `STRAVA_WEBHOOK_VERIFY_TOKEN` matches
 
 ### Authentication Issues
+
 - Clear browser cookies and try again
 - Check that `JWT_SECRET` is set correctly
 - Verify Strava callback domain matches your Vercel URL
 
 ### Weather Not Appearing
+
 - Confirm activity has GPS coordinates
 - Check OpenWeatherMap API quota
 - Verify user has weather updates enabled
 
 ### Database Issues
+
 - Ensure `DATABASE_URL` includes `?sslmode=require` for Neon
 - Run migrations: `npm run db:migrate`
 - Check connection with: `npm run db:studio`
@@ -233,6 +240,7 @@ strava-weather/
 ## Contributing
 
 Contributions are welcome! Please:
+
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
@@ -245,6 +253,7 @@ MIT License - see [LICENSE](LICENSE) file
 ## Support
 
 If you encounter issues:
+
 1. Check [Vercel function logs](https://vercel.com/docs/functions/logs)
 2. Review the [GitHub issues](https://github.com/james-langridge/strava-weather/issues)
 3. Create a new issue with:
