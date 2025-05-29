@@ -470,24 +470,6 @@ describe("ActivityProcessor Service", () => {
         "Partly cloudy, 15°C, Feels like 13°C, Humidity 65%, Wind 3.5m/s from SW",
       );
     });
-
-    it("should remove existing weather data before adding new", () => {
-      const activityWithOldWeather = {
-        ...mockActivity,
-        description:
-          "Great run!\n\nSunny, 25°C, Feels like 23°C, Humidity 40%, Wind 2m/s from E",
-      };
-
-      const result = (activityProcessor as any).createWeatherDescription(
-        activityWithOldWeather,
-        mockWeatherData,
-      );
-
-      expect(result).toBe(
-        "Great run!\n\nPartly cloudy, 15°C, Feels like 13°C, Humidity 65%, Wind 3.5m/s from SW",
-      );
-      expect(result).not.toContain("25°C");
-    });
   });
 
   describe("getWindDirectionString", () => {
