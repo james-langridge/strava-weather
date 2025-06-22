@@ -2,6 +2,13 @@
 
 Automatically add weather data to your Strava activities! This app uses webhooks to detect new activities and adds weather information to the activity description.
 
+> [!WARNING]  
+> Vercel works but is not a good choice for this app due to its serverless nature. I won't develop this monorepo further, but it still works if you want to deploy it to Vercel for convenience. It works fine as your personal Strava API Application for a single user (you).  
+> I will continue developing this but in these repositories:  
+> - https://github.com/james-langridge/strava-weather-node-api  
+> - https://github.com/james-langridge/strava-weather-react-web  
+> - https://github.com/james-langridge/strava-weather-dotnet-api
+
 ## Overview
 
 This is a full-stack application that automatically adds weather data to your Strava activities:
